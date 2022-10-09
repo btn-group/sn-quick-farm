@@ -4,8 +4,7 @@ use crate::constants::{
 };
 use crate::msg::{HandleMsg, InitMsg, QueryMsg};
 use crate::state::{
-    read_registered_token, write_registered_token, ActivityRecord, Config, RegisteredToken,
-    SecretContract,
+    read_registered_token, ActivityRecord, Config, RegisteredToken, SecretContract,
 };
 use crate::validations::authorize;
 use cosmwasm_std::{
@@ -48,10 +47,6 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
         HandleMsg::Receive {
             from, amount, msg, ..
         } => receive(deps, env, from, amount, msg),
-        HandleMsg::RegisterTokens {
-            tokens,
-            viewing_key,
-        } => register_tokens(deps, &env, tokens, viewing_key),
         HandleMsg::RescueTokens {
             denom,
             key,
@@ -220,50 +215,6 @@ fn query_balance_of_token<S: Storage, A: Api, Q: Querier>(
         )?;
         Ok(balance.amount)
     }
-}
-
-fn register_tokens<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
-    env: &Env,
-    tokens: Vec<SecretContract>,
-    viewing_key: String,
-) -> StdResult<HandleResponse> {
-    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
-    authorize(vec![config.admin], &env.message.sender)?;
-    let mut messages = vec![];
-    for token in tokens {
-        let token_address_canonical = deps.api.canonical_address(&token.address)?;
-        let token_details: Option<RegisteredToken> =
-            read_registered_token(&deps.storage, &token_address_canonical);
-        if token_details.is_none() {
-            let token_details: RegisteredToken = RegisteredToken {
-                address: token.address.clone(),
-                contract_hash: token.contract_hash.clone(),
-                sum_balance: Uint128(0),
-            };
-            write_registered_token(&mut deps.storage, &token_address_canonical, &token_details)?;
-            messages.push(snip20::register_receive_msg(
-                env.contract_code_hash.clone(),
-                None,
-                BLOCK_SIZE,
-                token.contract_hash.clone(),
-                token.address.clone(),
-            )?);
-        }
-        messages.push(snip20::set_viewing_key_msg(
-            viewing_key.clone(),
-            None,
-            BLOCK_SIZE,
-            token.contract_hash,
-            token.address,
-        )?);
-    }
-
-    Ok(HandleResponse {
-        messages,
-        log: vec![],
-        data: None,
-    })
 }
 
 fn rescue_tokens<S: Storage, A: Api, Q: Querier>(

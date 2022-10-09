@@ -19,10 +19,6 @@ pub enum HandleMsg {
         amount: Uint128,
         msg: Option<Binary>,
     },
-    RegisterTokens {
-        tokens: Vec<SecretContract>,
-        viewing_key: String,
-    },
     RescueTokens {
         denom: Option<String>,
         key: Option<String>,
