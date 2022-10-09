@@ -1,8 +1,7 @@
-use crate::state::{ActivityRecord, Hop, HumanizedOrder, SecretContract};
+use crate::state::{ActivityRecord, SecretContract};
 use cosmwasm_std::{Binary, HumanAddr, Uint128};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InitMsg {
@@ -14,16 +13,6 @@ pub struct InitMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HandleMsg {
-    CancelOrder {
-        from_token_address: HumanAddr,
-        position: Uint128,
-    },
-    FinalizeRoute {},
-    HandleFirstHop {
-        borrow_amount: Uint128,
-        hops: VecDeque<Hop>,
-        minimum_acceptable_amount: Option<Uint128>,
-    },
     Receive {
         sender: HumanAddr,
         from: HumanAddr,
@@ -47,7 +36,7 @@ pub enum HandleMsg {
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
-pub enum QueryAnswer {
+pub enum QueryAnswer<HumanizedOrder> {
     ActivityRecords {
         activity_records: Vec<ActivityRecord>,
         total: Option<Uint128>,
@@ -61,28 +50,7 @@ pub enum QueryAnswer {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    CancelRecords {
-        key: String,
-        page: Uint128,
-        page_size: Uint128,
-    },
-    FillRecords {
-        key: String,
-        page: Uint128,
-        page_size: Uint128,
-    },
     Config {},
-    Orders {
-        address: HumanAddr,
-        key: String,
-        page: Uint128,
-        page_size: Uint128,
-    },
-    OrdersByPositions {
-        address: HumanAddr,
-        key: String,
-        positions: Vec<Uint128>,
-    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -96,14 +64,5 @@ pub enum ReceiveMsg {
     },
     FillOrder {
         position: Uint128,
-    },
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum Snip20Swap {
-    Swap {
-        expected_return: Option<Uint128>,
-        to: Option<HumanAddr>,
     },
 }

@@ -5,60 +5,6 @@
     {
       "type": "object",
       "required": [
-        "cancel_records"
-      ],
-      "properties": {
-        "cancel_records": {
-          "type": "object",
-          "required": [
-            "key",
-            "page",
-            "page_size"
-          ],
-          "properties": {
-            "key": {
-              "type": "string"
-            },
-            "page": {
-              "$ref": "#/definitions/Uint128"
-            },
-            "page_size": {
-              "$ref": "#/definitions/Uint128"
-            }
-          }
-        }
-      }
-    },
-    {
-      "type": "object",
-      "required": [
-        "fill_records"
-      ],
-      "properties": {
-        "fill_records": {
-          "type": "object",
-          "required": [
-            "key",
-            "page",
-            "page_size"
-          ],
-          "properties": {
-            "key": {
-              "type": "string"
-            },
-            "page": {
-              "$ref": "#/definitions/Uint128"
-            },
-            "page_size": {
-              "$ref": "#/definitions/Uint128"
-            }
-          }
-        }
-      }
-    },
-    {
-      "type": "object",
-      "required": [
         "config"
       ],
       "properties": {
@@ -66,75 +12,6 @@
           "type": "object"
         }
       }
-    },
-    {
-      "type": "object",
-      "required": [
-        "orders"
-      ],
-      "properties": {
-        "orders": {
-          "type": "object",
-          "required": [
-            "address",
-            "key",
-            "page",
-            "page_size"
-          ],
-          "properties": {
-            "address": {
-              "$ref": "#/definitions/HumanAddr"
-            },
-            "key": {
-              "type": "string"
-            },
-            "page": {
-              "$ref": "#/definitions/Uint128"
-            },
-            "page_size": {
-              "$ref": "#/definitions/Uint128"
-            }
-          }
-        }
-      }
-    },
-    {
-      "type": "object",
-      "required": [
-        "orders_by_positions"
-      ],
-      "properties": {
-        "orders_by_positions": {
-          "type": "object",
-          "required": [
-            "address",
-            "key",
-            "positions"
-          ],
-          "properties": {
-            "address": {
-              "$ref": "#/definitions/HumanAddr"
-            },
-            "key": {
-              "type": "string"
-            },
-            "positions": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/Uint128"
-              }
-            }
-          }
-        }
-      }
     }
-  ],
-  "definitions": {
-    "HumanAddr": {
-      "type": "string"
-    },
-    "Uint128": {
-      "type": "string"
-    }
-  }
+  ]
 }
