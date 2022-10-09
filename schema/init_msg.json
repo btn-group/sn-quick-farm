@@ -3,18 +3,10 @@
   "title": "InitMsg",
   "type": "object",
   "required": [
-    "butt",
-    "execution_fee",
-    "sscrt"
+    "butt"
   ],
   "properties": {
     "butt": {
-      "$ref": "#/definitions/SecretContract"
-    },
-    "execution_fee": {
-      "$ref": "#/definitions/Uint128"
-    },
-    "sscrt": {
       "$ref": "#/definitions/SecretContract"
     }
   },
@@ -36,9 +28,6 @@
           "type": "string"
         }
       }
-    },
-    "Uint128": {
-      "type": "string"
     }
   }
 }

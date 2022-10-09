@@ -6,8 +6,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InitMsg {
     pub butt: SecretContract,
-    pub execution_fee: Uint128,
-    pub sscrt: SecretContract,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -18,10 +16,6 @@ pub enum HandleMsg {
         from: HumanAddr,
         amount: Uint128,
         msg: Option<Binary>,
-    },
-    UpdateConfig {
-        addresses_allowed_to_fill: Option<Vec<HumanAddr>>,
-        execution_fee: Option<Uint128>,
     },
 }
 

@@ -3,29 +3,14 @@
   "title": "Config",
   "type": "object",
   "required": [
-    "addresses_allowed_to_fill",
     "admin",
-    "butt",
-    "execution_fee",
-    "sscrt"
+    "butt"
   ],
   "properties": {
-    "addresses_allowed_to_fill": {
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/HumanAddr"
-      }
-    },
     "admin": {
       "$ref": "#/definitions/HumanAddr"
     },
     "butt": {
-      "$ref": "#/definitions/SecretContract"
-    },
-    "execution_fee": {
-      "$ref": "#/definitions/Uint128"
-    },
-    "sscrt": {
       "$ref": "#/definitions/SecretContract"
     }
   },
@@ -47,9 +32,6 @@
           "type": "string"
         }
       }
-    },
-    "Uint128": {
-      "type": "string"
     }
   }
 }
