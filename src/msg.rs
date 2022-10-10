@@ -22,5 +22,10 @@ pub enum HandleMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
+    ApiKey {
+        address: HumanAddr,
+        butt_viewing_key: String,
+        admin: bool,
+    },
     Config {},
 }
