@@ -22,5 +22,4 @@ pub enum QueryMsg {
         butt_viewing_key: String,
         admin: bool,
     },
-    Config {},
 }

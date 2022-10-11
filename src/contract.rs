@@ -45,10 +45,6 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
     msg: QueryMsg,
 ) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Config {} => {
-            let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
-            Ok(to_binary(&config)?)
-        }
         QueryMsg::ApiKey {
             address,
             butt_viewing_key,

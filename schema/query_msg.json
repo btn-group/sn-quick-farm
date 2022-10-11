@@ -28,17 +28,6 @@
           }
         }
       }
-    },
-    {
-      "type": "object",
-      "required": [
-        "config"
-      ],
-      "properties": {
-        "config": {
-          "type": "object"
-        }
-      }
     }
   ],
   "definitions": {
