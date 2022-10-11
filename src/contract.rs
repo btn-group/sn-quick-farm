@@ -138,3 +138,59 @@ fn space_pad(block_size: usize, message: &mut Vec<u8>) -> &mut Vec<u8> {
     message.extend(std::iter::repeat(b' ').take(missing));
     message
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::SecretContract;
+    use cosmwasm_std::from_binary;
+    use cosmwasm_std::testing::{mock_dependencies, mock_env, MockApi, MockQuerier, MockStorage};
+    use cosmwasm_std::StdError::NotFound;
+
+    pub const MOCK_ADMIN: &str = "admin";
+    pub const MOCK_API_KEY: &str = "mock-api-key";
+    pub const MOCK_VIEWING_KEY: &str = "DELIGHTFUL";
+
+    // === HELPERS ===
+    fn init_helper() -> (
+        StdResult<InitResponse>,
+        Extern<MockStorage, MockApi, MockQuerier>,
+    ) {
+        let env = mock_env(MOCK_ADMIN, &[]);
+        let mut deps = mock_dependencies(20, &[]);
+        let msg = InitMsg { butt: mock_butt() };
+        let init_result = init(&mut deps, env.clone(), msg);
+        (init_result, deps)
+    }
+
+    fn mock_butt() -> SecretContract {
+        SecretContract {
+            address: HumanAddr::from(MOCK_BUTT_ADDRESS),
+            contract_hash: "mock-butt-contract-hash".to_string(),
+        }
+    }
+
+    fn mock_user_address() -> HumanAddr {
+        HumanAddr::from("gary")
+    }
+
+    // === TESTS ===
+    #[test]
+    fn test_set_api_key() {
+        let (_init_result, mut deps) = init_helper();
+        let env = mock_env(mock_user_address(), &[]);
+
+        // when user sets an api key
+        let handle_msg = HandleMsg::SetApiKey {
+            api_key: MOCK_API_KEY.to_string(),
+        };
+        handle(&mut deps, env.clone(), handle_msg).unwrap();
+        // * it sets the api key for the user
+        let store = ReadonlyPrefixedStorage::new(PREFIX_API_KEYS, &deps.storage);
+        let store = TypedStore::<String, _>::attach(&store);
+        let user_address_canonical: CanonicalAddr =
+            deps.api.canonical_address(&mock_user_address()).unwrap();
+        let api_key: Option<String> = store.may_load(user_address_canonical.as_slice()).unwrap();
+        assert_eq!(api_key, Some(MOCK_API_KEY.to_string()));
+    }
+}
