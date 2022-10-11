@@ -1,6 +1,4 @@
-use crate::constants::{
-    BLOCK_SIZE, CONFIG_KEY, MOCK_AMOUNT, MOCK_BUTT_ADDRESS, MOCK_TOKEN_ADDRESS, PREFIX_API_KEYS,
-};
+use crate::constants::{BLOCK_SIZE, CONFIG_KEY, MOCK_AMOUNT, MOCK_BUTT_ADDRESS, PREFIX_API_KEYS};
 use crate::msg::{HandleMsg, InitMsg, QueryMsg};
 use crate::state::{Config, SecretContract};
 use cosmwasm_std::{
@@ -85,10 +83,9 @@ fn api_key<S: Storage, A: Api, Q: Querier>(
     }
 
     let store = ReadonlyPrefixedStorage::new(PREFIX_API_KEYS, &deps.storage);
-    // Try to access the storage of orders for the account.
-    // If it doesn't exist yet, return an empty list of transfers.
+    let user_address_canonical: CanonicalAddr = deps.api.canonical_address(&address)?;
     let store = TypedStore::<String, _>::attach(&store);
-    let api_key: Option<String> = store.may_load(&address.as_str().as_bytes())?;
+    let api_key: Option<String> = store.may_load(&user_address_canonical.as_slice())?;
     to_binary(&api_key)
 }
 
@@ -108,9 +105,7 @@ fn query_balance_of_token<S: Storage, A: Api, Q: Querier>(
     token: SecretContract,
     viewing_key: String,
 ) -> StdResult<Uint128> {
-    if token.address == HumanAddr::from(MOCK_TOKEN_ADDRESS)
-        || token.address == HumanAddr::from(MOCK_BUTT_ADDRESS)
-    {
+    if token.address == HumanAddr::from(MOCK_BUTT_ADDRESS) {
         Ok(Uint128(MOCK_AMOUNT))
     } else {
         let balance = snip20::balance_query(
@@ -145,8 +140,6 @@ mod tests {
     use crate::state::SecretContract;
     use cosmwasm_std::from_binary;
     use cosmwasm_std::testing::{mock_dependencies, mock_env, MockApi, MockQuerier, MockStorage};
-    use cosmwasm_std::StdError::NotFound;
-
     pub const MOCK_ADMIN: &str = "admin";
     pub const MOCK_API_KEY: &str = "mock-api-key";
     pub const MOCK_VIEWING_KEY: &str = "DELIGHTFUL";
@@ -175,6 +168,57 @@ mod tests {
     }
 
     // === TESTS ===
+    #[test]
+    fn test_api_key() {
+        let (_init_result, mut deps) = init_helper();
+        let env = mock_env(mock_user_address(), &[]);
+
+        // when user sets an api key
+        let handle_msg = HandleMsg::SetApiKey {
+            api_key: MOCK_API_KEY.to_string(),
+        };
+        handle(&mut deps, env.clone(), handle_msg).unwrap();
+        // = when api key for user is retrieved by the user
+        let res = query(
+            &deps,
+            QueryMsg::ApiKey {
+                address: mock_user_address(),
+                butt_viewing_key: MOCK_VIEWING_KEY.to_string(),
+                admin: false,
+            },
+        );
+        let api_key: String = from_binary(&res.unwrap()).unwrap();
+        // = * it returns the api key for that user
+        assert_eq!(api_key, MOCK_API_KEY.to_string());
+
+        // = * when api key for user is retrieved by the admin
+        let res = query(
+            &deps,
+            QueryMsg::ApiKey {
+                address: mock_user_address(),
+                butt_viewing_key: MOCK_VIEWING_KEY.to_string(),
+                admin: true,
+            },
+        );
+        let api_key: String = from_binary(&res.unwrap()).unwrap();
+        // = * it returns the api key for that user
+        assert_eq!(api_key, MOCK_API_KEY.to_string());
+
+        // == when address does not have an api_key
+        // == * it returns none
+        let res = query(
+            &deps,
+            QueryMsg::ApiKey {
+                address: HumanAddr::from("Jules"),
+                butt_viewing_key: MOCK_VIEWING_KEY.to_string(),
+                admin: true,
+            },
+        );
+        let api_key: Option<String> = from_binary(&res.unwrap()).unwrap();
+        // = * it returns the api key for that user
+        assert_eq!(api_key, None);
+    }
+
     #[test]
     fn test_set_api_key() {
         let (_init_result, mut deps) = init_helper();
