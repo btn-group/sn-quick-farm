@@ -5,51 +5,21 @@
     {
       "type": "object",
       "required": [
-        "receive"
+        "set_api_key"
       ],
       "properties": {
-        "receive": {
+        "set_api_key": {
           "type": "object",
           "required": [
-            "amount",
-            "from",
-            "sender"
+            "api_key"
           ],
           "properties": {
-            "amount": {
-              "$ref": "#/definitions/Uint128"
-            },
-            "from": {
-              "$ref": "#/definitions/HumanAddr"
-            },
-            "msg": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Binary"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "sender": {
-              "$ref": "#/definitions/HumanAddr"
+            "api_key": {
+              "type": "string"
             }
           }
         }
       }
     }
-  ],
-  "definitions": {
-    "Binary": {
-      "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>",
-      "type": "string"
-    },
-    "HumanAddr": {
-      "type": "string"
-    },
-    "Uint128": {
-      "type": "string"
-    }
-  }
+  ]
 }

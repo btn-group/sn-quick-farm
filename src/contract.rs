@@ -4,9 +4,10 @@ use crate::constants::{
 use crate::msg::{HandleMsg, InitMsg, QueryMsg};
 use crate::state::{Config, SecretContract};
 use cosmwasm_std::{
-    to_binary, Api, Binary, Env, Extern, HandleResponse, HumanAddr, InitResponse, Querier,
-    StdResult, Storage, Uint128,
+    to_binary, Api, Binary, CanonicalAddr, Env, Extern, HandleResponse, HumanAddr, InitResponse,
+    Querier, StdResult, Storage, Uint128,
 };
+use cosmwasm_storage::PrefixedStorage;
 use cosmwasm_storage::ReadonlyPrefixedStorage;
 use secret_toolkit::snip20;
 use secret_toolkit::storage::{TypedStore, TypedStoreMut};
@@ -35,9 +36,7 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     msg: HandleMsg,
 ) -> StdResult<HandleResponse> {
     match msg {
-        HandleMsg::Receive {
-            from, amount, msg, ..
-        } => receive(deps, env, from, amount, msg),
+        HandleMsg::SetApiKey { api_key } => set_api_key(deps, env, api_key),
     }
 }
 
@@ -58,13 +57,15 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
     }
 }
 
-fn receive<S: Storage, A: Api, Q: Querier>(
-    _deps: &mut Extern<S, A, Q>,
-    _env: Env,
-    _from: HumanAddr,
-    _amount: Uint128,
-    _msg: Option<Binary>,
+fn set_api_key<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+    api_key: String,
 ) -> StdResult<HandleResponse> {
+    let user_address_canonical: CanonicalAddr = deps.api.canonical_address(&env.message.sender)?;
+    let mut prefixed_store = PrefixedStorage::new(PREFIX_API_KEYS, &mut deps.storage);
+    let mut api_key_store = TypedStoreMut::<String, _>::attach(&mut prefixed_store);
+    api_key_store.store(user_address_canonical.as_slice(), &api_key)?;
     let response = Ok(HandleResponse {
         messages: vec![],
         log: vec![],
