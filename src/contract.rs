@@ -553,22 +553,26 @@ mod tests {
         );
     }
 
-    // #[test]
-    // fn test_set_api_key() {
-    //     let (_init_result, mut deps) = init_helper();
-    //     let env = mock_env(mock_user_address(), &[]);
+    #[test]
+    fn test_query_config() {
+        let (_init_result, deps) = init_helper();
+        let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
 
-    //     // when user sets an api key
-    //     let handle_msg = HandleMsg::SetApiKey {
-    //         api_key: MOCK_API_KEY.to_string(),
-    //     };
-    //     handle(&mut deps, env.clone(), handle_msg).unwrap();
-    //     // * it sets the api key for the user
-    //     let store = ReadonlyPrefixedStorage::new(PREFIX_API_KEYS, &deps.storage);
-    //     let store = TypedStore::<String, _>::attach(&store);
-    //     let user_address_canonical: CanonicalAddr =
-    //         deps.api.canonical_address(&mock_user_address()).unwrap();
-    //     let api_key: Option<String> = store.may_load(user_address_canonical.as_slice()).unwrap();
-    //     assert_eq!(api_key, Some(MOCK_API_KEY.to_string()));
-    // }
+        // when admin has a butt viewing key
+        // = when admin submit the wrong butt viewing key, this will just have to be tested live
+
+        // = when admin submits the right butt viewing key
+        // =  it returns the config
+        let config_from_query: Config = from_binary(
+            &query(
+                &deps,
+                QueryMsg::Config {
+                    admin_viewing_key: MOCK_VIEWING_KEY.to_string(),
+                },
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(config, config_from_query);
+    }
 }
