@@ -18,7 +18,11 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     let mut config_store = TypedStoreMut::attach(&mut deps.storage);
     let config: Config = Config {
         admin: env.message.sender,
+        dex_aggregator: msg.dex_aggregator,
         butt: msg.butt,
+        swbtc: msg.swbtc,
+        butt_swbtc_trade_pair: msg.butt_swbtc_trade_pair,
+        butt_swbtc_lp: msg.butt_swbtc_lp,
     };
     config_store.store(CONFIG_KEY, &config)?;
 
@@ -134,107 +138,107 @@ fn space_pad(block_size: usize, message: &mut Vec<u8>) -> &mut Vec<u8> {
     message
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::state::SecretContract;
-    use cosmwasm_std::from_binary;
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, MockApi, MockQuerier, MockStorage};
-    pub const MOCK_ADMIN: &str = "admin";
-    pub const MOCK_API_KEY: &str = "mock-api-key";
-    pub const MOCK_VIEWING_KEY: &str = "DELIGHTFUL";
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::state::SecretContract;
+//     use cosmwasm_std::from_binary;
+//     use cosmwasm_std::testing::{mock_dependencies, mock_env, MockApi, MockQuerier, MockStorage};
+//     pub const MOCK_ADMIN: &str = "admin";
+//     pub const MOCK_API_KEY: &str = "mock-api-key";
+//     pub const MOCK_VIEWING_KEY: &str = "DELIGHTFUL";
 
-    // === HELPERS ===
-    fn init_helper() -> (
-        StdResult<InitResponse>,
-        Extern<MockStorage, MockApi, MockQuerier>,
-    ) {
-        let env = mock_env(MOCK_ADMIN, &[]);
-        let mut deps = mock_dependencies(20, &[]);
-        let msg = InitMsg { butt: mock_butt() };
-        let init_result = init(&mut deps, env.clone(), msg);
-        (init_result, deps)
-    }
+//     // === HELPERS ===
+//     fn init_helper() -> (
+//         StdResult<InitResponse>,
+//         Extern<MockStorage, MockApi, MockQuerier>,
+//     ) {
+//         let env = mock_env(MOCK_ADMIN, &[]);
+//         let mut deps = mock_dependencies(20, &[]);
+//         let msg = InitMsg { butt: mock_butt() };
+//         let init_result = init(&mut deps, env.clone(), msg);
+//         (init_result, deps)
+//     }
 
-    fn mock_butt() -> SecretContract {
-        SecretContract {
-            address: HumanAddr::from(MOCK_BUTT_ADDRESS),
-            contract_hash: "mock-butt-contract-hash".to_string(),
-        }
-    }
+//     fn mock_butt() -> SecretContract {
+//         SecretContract {
+//             address: HumanAddr::from(MOCK_BUTT_ADDRESS),
+//             contract_hash: "mock-butt-contract-hash".to_string(),
+//         }
+//     }
 
-    fn mock_user_address() -> HumanAddr {
-        HumanAddr::from("gary")
-    }
+//     fn mock_user_address() -> HumanAddr {
+//         HumanAddr::from("gary")
+//     }
 
-    // === TESTS ===
-    #[test]
-    fn test_api_key() {
-        let (_init_result, mut deps) = init_helper();
-        let env = mock_env(mock_user_address(), &[]);
+//     // === TESTS ===
+//     #[test]
+//     fn test_api_key() {
+//         let (_init_result, mut deps) = init_helper();
+//         let env = mock_env(mock_user_address(), &[]);
 
-        // when user sets an api key
-        let handle_msg = HandleMsg::SetApiKey {
-            api_key: MOCK_API_KEY.to_string(),
-        };
-        handle(&mut deps, env.clone(), handle_msg).unwrap();
-        // = when api key for user is retrieved by the user
-        let res = query(
-            &deps,
-            QueryMsg::ApiKey {
-                address: mock_user_address(),
-                butt_viewing_key: MOCK_VIEWING_KEY.to_string(),
-                admin: false,
-            },
-        );
-        let api_key: String = from_binary(&res.unwrap()).unwrap();
-        // = * it returns the api key for that user
-        assert_eq!(api_key, MOCK_API_KEY.to_string());
+//         // when user sets an api key
+//         let handle_msg = HandleMsg::SetApiKey {
+//             api_key: MOCK_API_KEY.to_string(),
+//         };
+//         handle(&mut deps, env.clone(), handle_msg).unwrap();
+//         // = when api key for user is retrieved by the user
+//         let res = query(
+//             &deps,
+//             QueryMsg::ApiKey {
+//                 address: mock_user_address(),
+//                 butt_viewing_key: MOCK_VIEWING_KEY.to_string(),
+//                 admin: false,
+//             },
+//         );
+//         let api_key: String = from_binary(&res.unwrap()).unwrap();
+//         // = * it returns the api key for that user
+//         assert_eq!(api_key, MOCK_API_KEY.to_string());
 
-        // = * when api key for user is retrieved by the admin
-        let res = query(
-            &deps,
-            QueryMsg::ApiKey {
-                address: mock_user_address(),
-                butt_viewing_key: MOCK_VIEWING_KEY.to_string(),
-                admin: true,
-            },
-        );
-        let api_key: String = from_binary(&res.unwrap()).unwrap();
-        // = * it returns the api key for that user
-        assert_eq!(api_key, MOCK_API_KEY.to_string());
+//         // = * when api key for user is retrieved by the admin
+//         let res = query(
+//             &deps,
+//             QueryMsg::ApiKey {
+//                 address: mock_user_address(),
+//                 butt_viewing_key: MOCK_VIEWING_KEY.to_string(),
+//                 admin: true,
+//             },
+//         );
+//         let api_key: String = from_binary(&res.unwrap()).unwrap();
+//         // = * it returns the api key for that user
+//         assert_eq!(api_key, MOCK_API_KEY.to_string());
 
-        // == when address does not have an api_key
-        // == * it returns none
-        let res = query(
-            &deps,
-            QueryMsg::ApiKey {
-                address: HumanAddr::from("Jules"),
-                butt_viewing_key: MOCK_VIEWING_KEY.to_string(),
-                admin: true,
-            },
-        );
-        let api_key: Option<String> = from_binary(&res.unwrap()).unwrap();
-        // = * it returns the api key for that user
-        assert_eq!(api_key, None);
-    }
+//         // == when address does not have an api_key
+//         // == * it returns none
+//         let res = query(
+//             &deps,
+//             QueryMsg::ApiKey {
+//                 address: HumanAddr::from("Jules"),
+//                 butt_viewing_key: MOCK_VIEWING_KEY.to_string(),
+//                 admin: true,
+//             },
+//         );
+//         let api_key: Option<String> = from_binary(&res.unwrap()).unwrap();
+//         // = * it returns the api key for that user
+//         assert_eq!(api_key, None);
+//     }
 
-    #[test]
-    fn test_set_api_key() {
-        let (_init_result, mut deps) = init_helper();
-        let env = mock_env(mock_user_address(), &[]);
+//     #[test]
+//     fn test_set_api_key() {
+//         let (_init_result, mut deps) = init_helper();
+//         let env = mock_env(mock_user_address(), &[]);
 
-        // when user sets an api key
-        let handle_msg = HandleMsg::SetApiKey {
-            api_key: MOCK_API_KEY.to_string(),
-        };
-        handle(&mut deps, env.clone(), handle_msg).unwrap();
-        // * it sets the api key for the user
-        let store = ReadonlyPrefixedStorage::new(PREFIX_API_KEYS, &deps.storage);
-        let store = TypedStore::<String, _>::attach(&store);
-        let user_address_canonical: CanonicalAddr =
-            deps.api.canonical_address(&mock_user_address()).unwrap();
-        let api_key: Option<String> = store.may_load(user_address_canonical.as_slice()).unwrap();
-        assert_eq!(api_key, Some(MOCK_API_KEY.to_string()));
-    }
-}
+//         // when user sets an api key
+//         let handle_msg = HandleMsg::SetApiKey {
+//             api_key: MOCK_API_KEY.to_string(),
+//         };
+//         handle(&mut deps, env.clone(), handle_msg).unwrap();
+//         // * it sets the api key for the user
+//         let store = ReadonlyPrefixedStorage::new(PREFIX_API_KEYS, &deps.storage);
+//         let store = TypedStore::<String, _>::attach(&store);
+//         let user_address_canonical: CanonicalAddr =
+//             deps.api.canonical_address(&mock_user_address()).unwrap();
+//         let api_key: Option<String> = store.may_load(user_address_canonical.as_slice()).unwrap();
+//         assert_eq!(api_key, Some(MOCK_API_KEY.to_string()));
+//     }
+// }

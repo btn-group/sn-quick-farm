@@ -5,7 +5,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {
     pub admin: HumanAddr,
+    pub dex_aggregator: SecretContract,
     pub butt: SecretContract,
+    pub swbtc: SecretContract,
+    pub butt_swbtc_trade_pair: SecretContract,
+    pub butt_swbtc_lp: SecretContract,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, JsonSchema)]
