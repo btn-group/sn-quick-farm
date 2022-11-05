@@ -2,10 +2,10 @@ use crate::constants::{BLOCK_SIZE, CONFIG_KEY, MOCK_AMOUNT, MOCK_BUTT_ADDRESS, P
 use crate::msg::{HandleMsg, InitMsg, QueryMsg};
 use crate::state::{Config, SecretContract};
 use cosmwasm_std::{
-    to_binary, Api, Binary, CanonicalAddr, Env, Extern, HandleResponse, HumanAddr, InitResponse,
-    Querier, StdResult, Storage, Uint128,
+    to_binary, Api, Binary, CanonicalAddr, CosmosMsg, Env, Extern, HandleResponse, HumanAddr,
+    InitResponse, Querier, StdResult, Storage, Uint128,
 };
-use cosmwasm_storage::PrefixedStorage;
+
 use cosmwasm_storage::ReadonlyPrefixedStorage;
 use secret_toolkit::snip20;
 use secret_toolkit::storage::{TypedStore, TypedStoreMut};
@@ -34,11 +34,13 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
 
 pub fn handle<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
-    env: Env,
+    _env: Env,
     msg: HandleMsg,
 ) -> StdResult<HandleResponse> {
     match msg {
-        HandleMsg::SetApiKey { api_key } => set_api_key(deps, env, api_key),
+        HandleMsg::IncreaseAllowanceForPairContract {} => {
+            increase_allowance_for_pair_contract(deps)
+        }
     }
 }
 
@@ -55,21 +57,35 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
     }
 }
 
-fn set_api_key<S: Storage, A: Api, Q: Querier>(
+fn increase_allowance_for_pair_contract<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
-    env: Env,
-    api_key: String,
 ) -> StdResult<HandleResponse> {
-    let user_address_canonical: CanonicalAddr = deps.api.canonical_address(&env.message.sender)?;
-    let mut prefixed_store = PrefixedStorage::new(PREFIX_API_KEYS, &mut deps.storage);
-    let mut api_key_store = TypedStoreMut::<String, _>::attach(&mut prefixed_store);
-    api_key_store.store(user_address_canonical.as_slice(), &api_key)?;
-    let response = Ok(HandleResponse {
-        messages: vec![],
+    let mut messages: Vec<CosmosMsg> = vec![];
+    let config: Config = TypedStoreMut::attach(&mut deps.storage).load(CONFIG_KEY)?;
+    messages.push(secret_toolkit::snip20::increase_allowance_msg(
+        config.butt_swbtc_trade_pair.address.clone(),
+        Uint128(u128::MAX),
+        None,
+        None,
+        BLOCK_SIZE,
+        config.butt.contract_hash,
+        config.butt.address,
+    )?);
+    messages.push(secret_toolkit::snip20::increase_allowance_msg(
+        config.butt_swbtc_trade_pair.address,
+        Uint128(u128::MAX),
+        None,
+        None,
+        BLOCK_SIZE,
+        config.swbtc.contract_hash,
+        config.swbtc.address,
+    )?);
+
+    Ok(HandleResponse {
+        messages,
         log: vec![],
         data: None,
-    });
-    pad_response(response)
+    })
 }
 
 fn api_key<S: Storage, A: Api, Q: Querier>(

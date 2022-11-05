@@ -15,7 +15,7 @@ pub struct InitMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HandleMsg {
-    SetApiKey { api_key: String },
+    IncreaseAllowanceForPairContract {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
