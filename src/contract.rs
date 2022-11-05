@@ -76,6 +76,9 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
         HandleMsg::SwapHalfOfSwbtcToButt { config } => {
             swap_half_of_swbtc_to_butt(deps, &env, config)
         }
+        HandleMsg::UpdateDexAggregator { new_dex_aggregator } => {
+            update_dex_aggregator(deps, &env, new_dex_aggregator)
+        }
     }
 }
 
@@ -408,6 +411,25 @@ fn space_pad(block_size: usize, message: &mut Vec<u8>) -> &mut Vec<u8> {
     message.reserve(missing);
     message.extend(std::iter::repeat(b' ').take(missing));
     message
+}
+
+fn update_dex_aggregator<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: &Env,
+    new_dex_aggregator: SecretContract,
+) -> StdResult<HandleResponse> {
+    let mut config_store = TypedStoreMut::attach(&mut deps.storage);
+    let mut config: Config = config_store.load(CONFIG_KEY)?;
+    authorize([env.message.sender.clone()].to_vec(), &config.admin)?;
+
+    config.dex_aggregator = new_dex_aggregator;
+    config_store.store(CONFIG_KEY, &config)?;
+
+    Ok(HandleResponse {
+        messages: vec![],
+        log: vec![],
+        data: None,
+    })
 }
 
 // #[cfg(test)]
