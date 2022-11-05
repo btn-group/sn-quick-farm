@@ -122,6 +122,25 @@
           }
         }
       }
+    },
+    {
+      "type": "object",
+      "required": [
+        "update_dex_aggregator"
+      ],
+      "properties": {
+        "update_dex_aggregator": {
+          "type": "object",
+          "required": [
+            "new_dex_aggregator"
+          ],
+          "properties": {
+            "new_dex_aggregator": {
+              "$ref": "#/definitions/SecretContract"
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {
