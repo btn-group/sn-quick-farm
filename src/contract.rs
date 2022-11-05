@@ -1,5 +1,6 @@
 use crate::constants::{
-    BLOCK_SIZE, CONFIG_KEY, MOCK_AMOUNT, MOCK_AMOUNT_TWO, MOCK_BUTT_ADDRESS, MOCK_SWBTC_ADDRESS,
+    BLOCK_SIZE, CONFIG_KEY, MOCK_AMOUNT, MOCK_AMOUNT_TWO, MOCK_BUTT_ADDRESS,
+    MOCK_BUTT_SWBTC_LP_ADDRESS, MOCK_SWBTC_ADDRESS,
 };
 use crate::msg::{Asset, AssetInfo, HandleMsg, InitMsg, QueryMsg, ReceiveMsg, SecretSwapHandleMsg};
 use crate::state::{Config, SecretContract};
@@ -346,6 +347,8 @@ fn query_balance_of_token<S: Storage, A: Api, Q: Querier>(
         Ok(Uint128(MOCK_AMOUNT))
     } else if token.address == HumanAddr::from(MOCK_SWBTC_ADDRESS) {
         Ok(Uint128(MOCK_AMOUNT_TWO))
+    } else if token.address == HumanAddr::from(MOCK_BUTT_SWBTC_LP_ADDRESS) {
+        Ok(Uint128(MOCK_AMOUNT_TWO))
     } else {
         let balance = snip20::balance_query(
             &deps.querier,
@@ -389,7 +392,7 @@ fn send_lp_to_user<S: Storage, A: Api, Q: Querier>(
     authorize([env.message.sender.clone()].to_vec(), &env.contract.address)?;
 
     // Query the contract's SWBTC balance
-    let lb_balance_of_contract: Uint128 = query_balance_of_token(
+    let lp_balance_of_contract: Uint128 = query_balance_of_token(
         deps,
         env.contract.address.clone(),
         config.butt_swbtc_lp.clone(),
@@ -397,10 +400,16 @@ fn send_lp_to_user<S: Storage, A: Api, Q: Querier>(
     )
     .unwrap();
 
+    if lp_balance_of_contract.is_zero() {
+        return Err(StdError::generic_err(
+            "Result BUTT-SWBTC LP must be greater than zero.",
+        ));
+    }
+
     Ok(HandleResponse {
         messages: vec![snip20::transfer_msg(
             user_address,
-            lb_balance_of_contract,
+            lp_balance_of_contract,
             None,
             BLOCK_SIZE,
             config.butt_swbtc_lp.contract_hash,
@@ -482,7 +491,7 @@ mod tests {
 
     fn mock_butt_swbtc_lp() -> SecretContract {
         SecretContract {
-            address: HumanAddr::from("mock-butt-swbtc-lp-address"),
+            address: HumanAddr::from(MOCK_BUTT_SWBTC_LP_ADDRESS),
             contract_hash: "mock-butt-swbtc-lp-contract-hash".to_string(),
         }
     }
@@ -861,6 +870,52 @@ mod tests {
                 )
                 .unwrap(),
             ]
+        );
+    }
+
+    #[test]
+    fn test_send_lp_to_user() {
+        let (_init_result, mut deps) = init_helper();
+        let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
+        let handle_msg = HandleMsg::SendLpToUser {
+            config: config.clone(),
+            user_address: mock_user_address(),
+        };
+
+        // when called by non-contract
+        let mut env = mock_env(MOCK_ADMIN, &[]);
+        // = * it raises an unauthorized error
+        let mut handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::Unauthorized { backtrace: None }
+        );
+
+        // when called by contract
+        env = mock_env(env.contract.address, &[]);
+        // = when contract's balance of butt-swbtc-lp is zero
+        // == * it raises an error
+        // handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
+        // assert_eq!(
+        //     handle_result.unwrap_err(),
+        //     StdError::generic_err("Result BUTT-SWBTC LP must be greater than zero.",)
+        // );
+        // = when contract's balance of butt-swbtc-lp is greater than zero
+        // == * it sends the balance of the toke to the user
+        handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
+        let handle_result_unwrapped = handle_result.unwrap();
+        // * it sends a message to register receive for the token
+        assert_eq!(
+            handle_result_unwrapped.messages,
+            vec![snip20::transfer_msg(
+                mock_user_address(),
+                Uint128(MOCK_AMOUNT_TWO),
+                None,
+                BLOCK_SIZE,
+                config.butt_swbtc_lp.contract_hash,
+                config.butt_swbtc_lp.address,
+            )
+            .unwrap()]
         );
     }
 }
