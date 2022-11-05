@@ -1,6 +1,6 @@
 use cosmwasm_schema::{export_schema, remove_schemas, schema_for};
-use cw_secret_network_api_key_manager::msg::{HandleMsg, InitMsg, QueryMsg};
-use cw_secret_network_api_key_manager::state::Config;
+use cw_sn_zap::msg::{HandleMsg, InitMsg, QueryMsg};
+use cw_sn_zap::state::Config;
 use std::env::current_dir;
 use std::fs::create_dir_all;
 

@@ -1,5 +1,5 @@
 [package]
-name = "cw-secret-network-api-key-manager"
+name = "cw-secret-network-zap"
 version = "0.1.0"
 authors = ["Steven Chang <steven.chang@btn.group>"]
 edition = "2018"
