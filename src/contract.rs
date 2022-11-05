@@ -1,14 +1,13 @@
-use crate::constants::{BLOCK_SIZE, CONFIG_KEY, MOCK_AMOUNT, MOCK_BUTT_ADDRESS, PREFIX_API_KEYS};
-use crate::msg::{HandleMsg, InitMsg, QueryMsg};
+use crate::constants::{BLOCK_SIZE, CONFIG_KEY, MOCK_AMOUNT, MOCK_BUTT_ADDRESS, VIEWING_KEY};
+use crate::msg::{HandleMsg, InitMsg};
 use crate::state::{Config, SecretContract};
 use cosmwasm_std::{
-    to_binary, Api, Binary, CanonicalAddr, CosmosMsg, Env, Extern, HandleResponse, HumanAddr,
-    InitResponse, Querier, StdResult, Storage, Uint128,
+    Api, CosmosMsg, Env, Extern, HandleResponse, HumanAddr, InitResponse, Querier, StdResult,
+    Storage, Uint128,
 };
 
-use cosmwasm_storage::ReadonlyPrefixedStorage;
 use secret_toolkit::snip20;
-use secret_toolkit::storage::{TypedStore, TypedStoreMut};
+use secret_toolkit::storage::TypedStoreMut;
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
@@ -27,7 +26,13 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     config_store.store(CONFIG_KEY, &config)?;
 
     Ok(InitResponse {
-        messages: vec![],
+        messages: vec![snip20::set_viewing_key_msg(
+            VIEWING_KEY.to_string(),
+            None,
+            1,
+            config.butt_swbtc_lp.contract_hash,
+            config.butt_swbtc_lp.address,
+        )?],
         log: vec![],
     })
 }
@@ -41,19 +46,6 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
         HandleMsg::IncreaseAllowanceForPairContract {} => {
             increase_allowance_for_pair_contract(deps)
         }
-    }
-}
-
-pub fn query<S: Storage, A: Api, Q: Querier>(
-    deps: &Extern<S, A, Q>,
-    msg: QueryMsg,
-) -> StdResult<Binary> {
-    match msg {
-        QueryMsg::ApiKey {
-            address,
-            butt_viewing_key,
-            admin,
-        } => api_key(deps, address, butt_viewing_key, admin),
     }
 }
 
@@ -86,27 +78,6 @@ fn increase_allowance_for_pair_contract<S: Storage, A: Api, Q: Querier>(
         log: vec![],
         data: None,
     })
-}
-
-fn api_key<S: Storage, A: Api, Q: Querier>(
-    deps: &Extern<S, A, Q>,
-    address: HumanAddr,
-    butt_viewing_key: String,
-    admin: bool,
-) -> StdResult<Binary> {
-    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
-    // This is here so that the user can use their viewing key for butt for this
-    if admin {
-        query_balance_of_token(deps, config.admin, config.butt, butt_viewing_key)?;
-    } else {
-        query_balance_of_token(deps, address.clone(), config.butt, butt_viewing_key)?;
-    }
-
-    let store = ReadonlyPrefixedStorage::new(PREFIX_API_KEYS, &deps.storage);
-    let user_address_canonical: CanonicalAddr = deps.api.canonical_address(&address)?;
-    let store = TypedStore::<String, _>::attach(&store);
-    let api_key: Option<String> = store.may_load(&user_address_canonical.as_slice())?;
-    to_binary(&api_key)
 }
 
 fn pad_response(response: StdResult<HandleResponse>) -> StdResult<HandleResponse> {
