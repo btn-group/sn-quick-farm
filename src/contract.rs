@@ -1,4 +1,6 @@
-use crate::constants::{BLOCK_SIZE, CONFIG_KEY, MOCK_AMOUNT, MOCK_BUTT_ADDRESS};
+use crate::constants::{
+    BLOCK_SIZE, CONFIG_KEY, MOCK_AMOUNT, MOCK_AMOUNT_TWO, MOCK_BUTT_ADDRESS, MOCK_SWBTC_ADDRESS,
+};
 use crate::msg::{Asset, AssetInfo, HandleMsg, InitMsg, QueryMsg, ReceiveMsg, SecretSwapHandleMsg};
 use crate::state::{Config, SecretContract};
 use crate::validations::authorize;
@@ -342,6 +344,8 @@ fn query_balance_of_token<S: Storage, A: Api, Q: Querier>(
 ) -> StdResult<Uint128> {
     if token.address == HumanAddr::from(MOCK_BUTT_ADDRESS) {
         Ok(Uint128(MOCK_AMOUNT))
+    } else if token.address == HumanAddr::from(MOCK_SWBTC_ADDRESS) {
+        Ok(Uint128(MOCK_AMOUNT_TWO))
     } else {
         let balance = snip20::balance_query(
             &deps.querier,
@@ -447,7 +451,6 @@ mod tests {
     use cosmwasm_std::testing::{mock_dependencies, mock_env, MockApi, MockQuerier, MockStorage};
     pub const MOCK_ADMIN: &str = "admin";
     pub const MOCK_DEX_AGGREGATOR_ADDRESS: &str = "mock-dex-aggregator-address";
-    pub const MOCK_SWBTC_ADDRESS: &str = "mock-swbtc-address";
     pub const MOCK_BUTT_SWBTC_TRADE_PAIR_CONTRACT_ADDRESS: &str = "mock-swbtc-address";
     pub const MOCK_VIEWING_KEY: &str = "DELIGHTFUL";
 
@@ -763,5 +766,66 @@ mod tests {
                 "DEX aggregator msg must be present when first token is not SWBTC."
             )
         );
+    }
+
+    #[test]
+    fn test_provide_liquidity_to_trade_pair() {
+        let (_init_result, mut deps) = init_helper();
+        let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
+        let add_liquidity_to_pair_contract_msg = HandleMsg::ProvideLiquidityToTradePair {
+            config: config.clone(),
+        };
+
+        // when called by non-contract
+        let mut env = mock_env(MOCK_ADMIN, &[]);
+        // = * it raises an unauthorized error
+        let mut handle_result = handle(
+            &mut deps,
+            env.clone(),
+            add_liquidity_to_pair_contract_msg.clone(),
+        );
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::Unauthorized { backtrace: None }
+        );
+
+        // when called by contract
+        env = mock_env(env.contract.address, &[]);
+        // = * it provides the balance of BUTT and SWBTC of contract to trade pair contract
+        handle_result = handle(
+            &mut deps,
+            env.clone(),
+            add_liquidity_to_pair_contract_msg.clone(),
+        );
+        let handle_result_unwrapped = handle_result.unwrap();
+        let provide_liquidity_msg = SecretSwapHandleMsg::ProvideLiquidity {
+            assets: [
+                Asset {
+                    amount: Uint128(MOCK_AMOUNT_TWO),
+                    info: AssetInfo::Token {
+                        contract_addr: config.swbtc.address,
+                        token_code_hash: config.swbtc.contract_hash,
+                        viewing_key: "SecretSwap".to_string(),
+                    },
+                },
+                Asset {
+                    amount: Uint128(MOCK_AMOUNT),
+                    info: AssetInfo::Token {
+                        contract_addr: config.butt.address,
+                        token_code_hash: config.butt.contract_hash.clone(),
+                        viewing_key: "SecretSwap".to_string(),
+                    },
+                },
+            ],
+            slippage_tolerance: None,
+        };
+        let cosmos_msg = provide_liquidity_msg
+            .to_cosmos_msg(
+                mock_butt_swbtc_trade_pair().contract_hash,
+                mock_butt_swbtc_trade_pair().address,
+                None,
+            )
+            .unwrap();
+        assert_eq!(handle_result_unwrapped.messages, vec![cosmos_msg]);
     }
 }
