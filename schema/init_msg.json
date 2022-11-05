@@ -3,10 +3,26 @@
   "title": "InitMsg",
   "type": "object",
   "required": [
-    "butt"
+    "butt",
+    "butt_swbtc_lp",
+    "butt_swbtc_trade_pair",
+    "dex_aggregator",
+    "swbtc"
   ],
   "properties": {
     "butt": {
+      "$ref": "#/definitions/SecretContract"
+    },
+    "butt_swbtc_lp": {
+      "$ref": "#/definitions/SecretContract"
+    },
+    "butt_swbtc_trade_pair": {
+      "$ref": "#/definitions/SecretContract"
+    },
+    "dex_aggregator": {
+      "$ref": "#/definitions/SecretContract"
+    },
+    "swbtc": {
       "$ref": "#/definitions/SecretContract"
     }
   },

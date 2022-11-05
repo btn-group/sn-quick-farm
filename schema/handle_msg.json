@@ -5,21 +5,181 @@
     {
       "type": "object",
       "required": [
-        "set_api_key"
+        "increase_allowance_for_pair_contract"
       ],
       "properties": {
-        "set_api_key": {
+        "increase_allowance_for_pair_contract": {
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "register_tokens"
+      ],
+      "properties": {
+        "register_tokens": {
           "type": "object",
           "required": [
-            "api_key"
+            "tokens"
           ],
           "properties": {
-            "api_key": {
-              "type": "string"
+            "tokens": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/SecretContract"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "receive"
+      ],
+      "properties": {
+        "receive": {
+          "type": "object",
+          "required": [
+            "amount",
+            "from",
+            "msg"
+          ],
+          "properties": {
+            "amount": {
+              "$ref": "#/definitions/Uint128"
+            },
+            "from": {
+              "$ref": "#/definitions/HumanAddr"
+            },
+            "msg": {
+              "$ref": "#/definitions/Binary"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "swap_half_of_swbtc_to_butt"
+      ],
+      "properties": {
+        "swap_half_of_swbtc_to_butt": {
+          "type": "object",
+          "required": [
+            "config"
+          ],
+          "properties": {
+            "config": {
+              "$ref": "#/definitions/Config"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "provide_liquidity_to_trade_pair"
+      ],
+      "properties": {
+        "provide_liquidity_to_trade_pair": {
+          "type": "object",
+          "required": [
+            "config"
+          ],
+          "properties": {
+            "config": {
+              "$ref": "#/definitions/Config"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "send_lp_to_user"
+      ],
+      "properties": {
+        "send_lp_to_user": {
+          "type": "object",
+          "required": [
+            "config",
+            "user_address"
+          ],
+          "properties": {
+            "config": {
+              "$ref": "#/definitions/Config"
+            },
+            "user_address": {
+              "$ref": "#/definitions/HumanAddr"
             }
           }
         }
       }
     }
-  ]
+  ],
+  "definitions": {
+    "Binary": {
+      "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>",
+      "type": "string"
+    },
+    "Config": {
+      "type": "object",
+      "required": [
+        "admin",
+        "butt",
+        "butt_swbtc_lp",
+        "butt_swbtc_trade_pair",
+        "dex_aggregator",
+        "swbtc"
+      ],
+      "properties": {
+        "admin": {
+          "$ref": "#/definitions/HumanAddr"
+        },
+        "butt": {
+          "$ref": "#/definitions/SecretContract"
+        },
+        "butt_swbtc_lp": {
+          "$ref": "#/definitions/SecretContract"
+        },
+        "butt_swbtc_trade_pair": {
+          "$ref": "#/definitions/SecretContract"
+        },
+        "dex_aggregator": {
+          "$ref": "#/definitions/SecretContract"
+        },
+        "swbtc": {
+          "$ref": "#/definitions/SecretContract"
+        }
+      }
+    },
+    "HumanAddr": {
+      "type": "string"
+    },
+    "SecretContract": {
+      "type": "object",
+      "required": [
+        "address",
+        "contract_hash"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/definitions/HumanAddr"
+        },
+        "contract_hash": {
+          "type": "string"
+        }
+      }
+    },
+    "Uint128": {
+      "type": "string"
+    }
+  }
 }
