@@ -12,6 +12,7 @@ pub struct InitMsg {
     pub swbtc: SecretContract,
     pub butt_swbtc_trade_pair: SecretContract,
     pub butt_swbtc_lp: SecretContract,
+    pub viewing_key: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -36,6 +37,12 @@ pub enum HandleMsg {
         config: Config,
         user_address: HumanAddr,
     },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum QueryMsg {
+    Config { admin_viewing_key: String },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

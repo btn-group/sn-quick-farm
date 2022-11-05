@@ -10,6 +10,7 @@ pub struct Config {
     pub swbtc: SecretContract,
     pub butt_swbtc_trade_pair: SecretContract,
     pub butt_swbtc_lp: SecretContract,
+    pub viewing_key: String,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, JsonSchema)]

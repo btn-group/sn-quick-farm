@@ -1,10 +1,10 @@
-use crate::constants::{BLOCK_SIZE, CONFIG_KEY, MOCK_AMOUNT, MOCK_BUTT_ADDRESS, VIEWING_KEY};
-use crate::msg::{Asset, AssetInfo, HandleMsg, InitMsg, ReceiveMsg, SecretSwapHandleMsg};
+use crate::constants::{BLOCK_SIZE, CONFIG_KEY, MOCK_AMOUNT, MOCK_BUTT_ADDRESS};
+use crate::msg::{Asset, AssetInfo, HandleMsg, InitMsg, QueryMsg, ReceiveMsg, SecretSwapHandleMsg};
 use crate::state::{Config, SecretContract};
 use crate::validations::authorize;
 use cosmwasm_std::{
     from_binary, to_binary, Api, Binary, CosmosMsg, Env, Extern, HandleResponse, HumanAddr,
-    InitResponse, Querier, StdError, StdResult, Storage, Uint128, WasmMsg,
+    InitResponse, Querier, QueryResult, StdError, StdResult, Storage, Uint128, WasmMsg,
 };
 use secret_toolkit::snip20;
 use secret_toolkit::storage::{TypedStore, TypedStoreMut};
@@ -23,27 +23,28 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
         swbtc: msg.swbtc,
         butt_swbtc_trade_pair: msg.butt_swbtc_trade_pair,
         butt_swbtc_lp: msg.butt_swbtc_lp,
+        viewing_key: msg.viewing_key,
     };
     config_store.store(CONFIG_KEY, &config)?;
 
     Ok(InitResponse {
         messages: vec![
             snip20::set_viewing_key_msg(
-                VIEWING_KEY.to_string(),
+                config.viewing_key.clone(),
                 None,
                 1,
                 config.butt.contract_hash,
                 config.butt.address,
             )?,
             snip20::set_viewing_key_msg(
-                VIEWING_KEY.to_string(),
+                config.viewing_key.clone(),
                 None,
                 1,
                 config.swbtc.contract_hash,
                 config.swbtc.address,
             )?,
             snip20::set_viewing_key_msg(
-                VIEWING_KEY.to_string(),
+                config.viewing_key.clone(),
                 None,
                 1,
                 config.butt_swbtc_lp.contract_hash,
@@ -76,6 +77,28 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             swap_half_of_swbtc_to_butt(deps, &env, config)
         }
     }
+}
+
+pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryMsg) -> QueryResult {
+    match msg {
+        QueryMsg::Config { admin_viewing_key } => query_config(deps, admin_viewing_key),
+    }
+}
+
+fn query_config<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    admin_viewing_key: String,
+) -> StdResult<Binary> {
+    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
+    // This is here to check the admin's viewing key
+    query_balance_of_token(
+        deps,
+        config.admin.clone(),
+        config.butt.clone(),
+        admin_viewing_key,
+    )?;
+
+    to_binary(&config)
 }
 
 fn receive<S: Storage, A: Api, Q: Querier>(
@@ -212,7 +235,7 @@ fn swap_half_of_swbtc_to_butt<S: Storage, A: Api, Q: Querier>(
         deps,
         env.contract.address.clone(),
         config.swbtc.clone(),
-        VIEWING_KEY.to_string(),
+        config.viewing_key,
     )
     .unwrap();
     // Swap half to BUTT
@@ -255,14 +278,14 @@ fn provide_liquidity_to_trade_pair<S: Storage, A: Api, Q: Querier>(
         deps,
         env.contract.address.clone(),
         config.swbtc.clone(),
-        VIEWING_KEY.to_string(),
+        config.viewing_key.clone(),
     )
     .unwrap();
     let butt_balance_of_contract: Uint128 = query_balance_of_token(
         deps,
         env.contract.address.clone(),
         config.butt.clone(),
-        VIEWING_KEY.to_string(),
+        config.viewing_key,
     )
     .unwrap();
     // Provide liquidity to farm contract
@@ -355,7 +378,7 @@ fn send_lp_to_user<S: Storage, A: Api, Q: Querier>(
         deps,
         env.contract.address.clone(),
         config.butt_swbtc_lp.clone(),
-        VIEWING_KEY.to_string(),
+        config.viewing_key,
     )
     .unwrap();
 
