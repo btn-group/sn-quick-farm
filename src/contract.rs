@@ -918,4 +918,42 @@ mod tests {
             .unwrap()]
         );
     }
+
+    #[test]
+    fn test_swap_half_of_swbtc_to_butt() {
+        let (_init_result, mut deps) = init_helper();
+        let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
+        let handle_msg = HandleMsg::SwapHalfOfSwbtcToButt {
+            config: config.clone(),
+        };
+
+        // when called by non-contract
+        let mut env = mock_env(MOCK_ADMIN, &[]);
+        // = * it raises an unauthorized error
+        let mut handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::Unauthorized { backtrace: None }
+        );
+
+        // when called by contract
+        env = mock_env(env.contract.address, &[]);
+        // * it sends half the balance of swbtc to swap
+        handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
+        let handle_result_unwrapped = handle_result.unwrap();
+        // * it sends a message to register receive for the token
+        assert_eq!(
+            handle_result_unwrapped.messages,
+            vec![secret_toolkit::snip20::send_msg(
+                config.butt_swbtc_trade_pair.address,
+                Uint128(MOCK_AMOUNT_TWO / 2),
+                Some(Binary::from(r#"{ "swap": {} }"#.as_bytes())),
+                None,
+                BLOCK_SIZE,
+                config.swbtc.contract_hash,
+                config.swbtc.address,
+            )
+            .unwrap()]
+        );
+    }
 }
