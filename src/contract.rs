@@ -39,13 +39,14 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
 
 pub fn handle<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
-    _env: Env,
+    env: Env,
     msg: HandleMsg,
 ) -> StdResult<HandleResponse> {
     match msg {
         HandleMsg::IncreaseAllowanceForPairContract {} => {
             increase_allowance_for_pair_contract(deps)
         }
+        HandleMsg::RegisterTokens { tokens } => register_tokens(&env, tokens),
     }
 }
 
@@ -109,6 +110,27 @@ fn query_balance_of_token<S: Storage, A: Api, Q: Querier>(
         )?;
         Ok(balance.amount)
     }
+}
+
+fn register_tokens(env: &Env, tokens: Vec<SecretContract>) -> StdResult<HandleResponse> {
+    let mut messages = vec![];
+    for token in tokens {
+        let address = token.address;
+        let contract_hash = token.contract_hash;
+        messages.push(snip20::register_receive_msg(
+            env.contract_code_hash.clone(),
+            None,
+            BLOCK_SIZE,
+            contract_hash.clone(),
+            address.clone(),
+        )?);
+    }
+
+    Ok(HandleResponse {
+        messages,
+        log: vec![],
+        data: None,
+    })
 }
 
 // Take a Vec<u8> and pad it up to a multiple of `block_size`, using spaces at the end.

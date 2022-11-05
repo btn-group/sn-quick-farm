@@ -11,6 +11,7 @@
 For developer
 1. Init
 2. Increase allowance for pair contract
+3. Register tokens
 
 Algorithm
 1. Send in token with message to dex aggregator. (deny token if it is butt)
