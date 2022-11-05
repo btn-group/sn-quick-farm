@@ -284,6 +284,13 @@ fn provide_liquidity_to_trade_pair<S: Storage, A: Api, Q: Querier>(
     // Test that the sender is from the trade pair
     authorize([from].to_vec(), &config.butt_swbtc_trade_pair.address)?;
 
+    let butt_balance_of_contract: Uint128 = amount;
+    if butt_balance_of_contract.is_zero() {
+        return Err(StdError::generic_err(
+            "Contract BUTT balance must be greater than zero.",
+        ));
+    }
+
     // Query the contract's SWBTC balance
     let swbtc_balance_of_contract: Uint128 = query_balance_of_token(
         deps,
@@ -292,7 +299,12 @@ fn provide_liquidity_to_trade_pair<S: Storage, A: Api, Q: Querier>(
         config.viewing_key.clone(),
     )
     .unwrap();
-    let butt_balance_of_contract: Uint128 = amount;
+    if swbtc_balance_of_contract.is_zero() {
+        return Err(StdError::generic_err(
+            "Contract SWBTC balance must be greater than zero.",
+        ));
+    }
+
     // Provide liquidity to farm contract
     let provide_liquidity_msg = SecretSwapHandleMsg::ProvideLiquidity {
         assets: [
@@ -393,7 +405,7 @@ fn send_lp_to_user<S: Storage, A: Api, Q: Querier>(
 
     if lp_balance_of_contract.is_zero() {
         return Err(StdError::generic_err(
-            "Result BUTT-SWBTC LP must be greater than zero.",
+            "Contract BUTT-SWBTC LP balance must be greater than zero.",
         ));
     }
 
