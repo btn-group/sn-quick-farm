@@ -64,7 +64,9 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
         HandleMsg::IncreaseAllowanceForPairContract {} => {
             increase_allowance_for_pair_contract(deps)
         }
-        HandleMsg::Receive { from, amount, msg } => receive(deps, env, from, amount, msg),
+        HandleMsg::Receive {
+            from, amount, msg, ..
+        } => receive(deps, env, from, amount, msg),
         HandleMsg::ProvideLiquidityToTradePair { config } => {
             provide_liquidity_to_trade_pair(deps, &env, config)
         }
@@ -133,7 +135,7 @@ fn init_swap_and_provide<S: Storage, A: Api, Q: Querier>(
     env: &Env,
     from: HumanAddr,
     amount: Uint128,
-    dex_aggregator_msg: Binary,
+    dex_aggregator_msg: Option<Binary>,
     first_token_contract_hash: String,
 ) -> StdResult<HandleResponse> {
     // 1. Make sure token isn't BUTT
@@ -145,10 +147,16 @@ fn init_swap_and_provide<S: Storage, A: Api, Q: Querier>(
     let mut messages: Vec<CosmosMsg> = vec![];
     // 2. Swap to DEX aggregator if first token is not butt
     if config.swbtc.address != env.message.sender {
+        if dex_aggregator_msg.is_none() {
+            return Err(StdError::generic_err(
+                "DEX aggregator msg must be present when first token is not SWBTC.",
+            ));
+        }
+
         messages.push(snip20::send_msg(
             config.dex_aggregator.address.clone(),
             amount,
-            Some(dex_aggregator_msg),
+            dex_aggregator_msg,
             None,
             BLOCK_SIZE,
             first_token_contract_hash,
@@ -166,7 +174,7 @@ fn init_swap_and_provide<S: Storage, A: Api, Q: Querier>(
         send: vec![],
     }));
 
-    // 4. Call function to provide LP
+    // 4. Call function to provide liquidity to trade pair
     messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: env.contract.address.clone(),
         callback_code_hash: env.contract_code_hash.clone(),
@@ -612,6 +620,148 @@ mod tests {
                 )
                 .unwrap()
             ]
+        );
+    }
+
+    #[test]
+    fn test_init_swap_and_provide() {
+        let (_init_result, mut deps) = init_helper();
+        let amount: Uint128 = Uint128(2);
+        let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
+        let mut dex_aggregator_msg: Option<Binary> = Some(to_binary(&123).unwrap());
+        let mut receive_msg = ReceiveMsg::InitSwapAndProvide {
+            dex_aggregator_msg: dex_aggregator_msg.clone(),
+            first_token_contract_hash: mock_butt().contract_hash,
+        };
+        // when token sent in is butt
+        let mut env = mock_env(mock_butt().address, &[]);
+        let mut handle_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount,
+            msg: to_binary(&receive_msg).unwrap(),
+        };
+        let mut handle_result = handle(&mut deps, env, handle_msg.clone());
+        // * it raises an error
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::generic_err("First token can't be BUTT.")
+        );
+
+        // when token sent in is swbtc
+        env = mock_env(mock_swbtc().address, &[]);
+        // * it calls the functions to swap half of SWBTC to BUTT
+        // * it calls the function to provide liquidity to trade pair
+        // * it calls the function to read balance of LP and send to user
+        handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
+        let mut handle_result_unwrapped = handle_result.unwrap();
+        assert_eq!(
+            handle_result_unwrapped.messages,
+            vec![
+                CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: env.contract.address.clone(),
+                    callback_code_hash: env.contract_code_hash.clone(),
+                    msg: to_binary(&HandleMsg::SwapHalfOfSwbtcToButt {
+                        config: config.clone(),
+                    })
+                    .unwrap(),
+                    send: vec![],
+                }),
+                CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: env.contract.address.clone(),
+                    callback_code_hash: env.contract_code_hash.clone(),
+                    msg: to_binary(&HandleMsg::ProvideLiquidityToTradePair {
+                        config: config.clone(),
+                    })
+                    .unwrap(),
+                    send: vec![],
+                }),
+                CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: env.contract.address.clone(),
+                    callback_code_hash: env.contract_code_hash.clone(),
+                    msg: to_binary(&HandleMsg::SendLpToUser {
+                        config: config.clone(),
+                        user_address: mock_user_address(),
+                    })
+                    .unwrap(),
+                    send: vec![],
+                })
+            ]
+        );
+
+        // when token sent in is not swbtc or butt
+        env = mock_env(mock_butt_swbtc_lp().address, &[]);
+        // = when dex_aggregator_msg is present
+        // = * it calls the function to swap to DEX aggregator
+        // = * it calls the functions to swap half of SWBTC to BUTT
+        // = * it calls the function to provide liquidity to trade pair
+        // = * it calls the function to read balance of LP and send to user
+        handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
+        handle_result_unwrapped = handle_result.unwrap();
+        assert_eq!(
+            handle_result_unwrapped.messages,
+            vec![
+                snip20::send_msg(
+                    config.dex_aggregator.address.clone(),
+                    amount,
+                    dex_aggregator_msg,
+                    None,
+                    BLOCK_SIZE,
+                    mock_butt().contract_hash,
+                    env.message.sender.clone(),
+                )
+                .unwrap(),
+                CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: env.contract.address.clone(),
+                    callback_code_hash: env.contract_code_hash.clone(),
+                    msg: to_binary(&HandleMsg::SwapHalfOfSwbtcToButt {
+                        config: config.clone(),
+                    })
+                    .unwrap(),
+                    send: vec![],
+                }),
+                CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: env.contract.address.clone(),
+                    callback_code_hash: env.contract_code_hash.clone(),
+                    msg: to_binary(&HandleMsg::ProvideLiquidityToTradePair {
+                        config: config.clone(),
+                    })
+                    .unwrap(),
+                    send: vec![],
+                }),
+                CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: env.contract.address.clone(),
+                    callback_code_hash: env.contract_code_hash.clone(),
+                    msg: to_binary(&HandleMsg::SendLpToUser {
+                        config,
+                        user_address: mock_user_address(),
+                    })
+                    .unwrap(),
+                    send: vec![],
+                })
+            ]
+        );
+
+        // = when dex_aggregator_msg is missing
+        dex_aggregator_msg = None;
+        receive_msg = ReceiveMsg::InitSwapAndProvide {
+            dex_aggregator_msg,
+            first_token_contract_hash: mock_butt_swbtc_lp().contract_hash,
+        };
+        handle_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount,
+            msg: to_binary(&receive_msg).unwrap(),
+        };
+        // = * it raises an error
+        handle_result = handle(&mut deps, env.clone(), handle_msg);
+        // * it raises an error
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::generic_err(
+                "DEX aggregator msg must be present when first token is not SWBTC."
+            )
         );
     }
 }

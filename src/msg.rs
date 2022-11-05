@@ -23,6 +23,7 @@ pub enum HandleMsg {
         tokens: Vec<SecretContract>,
     },
     Receive {
+        sender: HumanAddr,
         from: HumanAddr,
         amount: Uint128,
         msg: Binary,
@@ -53,7 +54,7 @@ pub enum QueryMsg {
 pub enum ReceiveMsg {
     InitSwapAndProvide {
         first_token_contract_hash: String,
-        dex_aggregator_msg: Binary,
+        dex_aggregator_msg: Option<Binary>,
     },
 }
 
