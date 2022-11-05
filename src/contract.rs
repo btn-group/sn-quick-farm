@@ -828,4 +828,39 @@ mod tests {
             .unwrap();
         assert_eq!(handle_result_unwrapped.messages, vec![cosmos_msg]);
     }
+
+    #[test]
+    fn test_register_tokens() {
+        let (_init_result, mut deps) = init_helper();
+        let env = mock_env(mock_user_address(), &[]);
+
+        // When tokens are in the parameter
+        let handle_msg = HandleMsg::RegisterTokens {
+            tokens: vec![mock_butt(), mock_swbtc()],
+        };
+        let handle_result = handle(&mut deps, env.clone(), handle_msg);
+        let handle_result_unwrapped = handle_result.unwrap();
+        // * it sends a message to register receive for the token
+        assert_eq!(
+            handle_result_unwrapped.messages,
+            vec![
+                snip20::register_receive_msg(
+                    env.contract_code_hash.clone(),
+                    None,
+                    BLOCK_SIZE,
+                    mock_butt().contract_hash,
+                    mock_butt().address,
+                )
+                .unwrap(),
+                snip20::register_receive_msg(
+                    env.contract_code_hash,
+                    None,
+                    BLOCK_SIZE,
+                    mock_swbtc().contract_hash,
+                    mock_swbtc().address,
+                )
+                .unwrap(),
+            ]
+        );
+    }
 }
