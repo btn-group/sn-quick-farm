@@ -432,107 +432,143 @@ fn update_dex_aggregator<S: Storage, A: Api, Q: Querier>(
     })
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::state::SecretContract;
-//     use cosmwasm_std::from_binary;
-//     use cosmwasm_std::testing::{mock_dependencies, mock_env, MockApi, MockQuerier, MockStorage};
-//     pub const MOCK_ADMIN: &str = "admin";
-//     pub const MOCK_API_KEY: &str = "mock-api-key";
-//     pub const MOCK_VIEWING_KEY: &str = "DELIGHTFUL";
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::SecretContract;
+    use cosmwasm_std::testing::{mock_dependencies, mock_env, MockApi, MockQuerier, MockStorage};
+    pub const MOCK_ADMIN: &str = "admin";
+    pub const MOCK_DEX_AGGREGATOR_ADDRESS: &str = "mock-dex-aggregator-address";
+    pub const MOCK_SWBTC_ADDRESS: &str = "mock-swbtc-address";
+    pub const MOCK_BUTT_SWBTC_TRADE_PAIR_CONTRACT_ADDRESS: &str = "mock-swbtc-address";
+    pub const MOCK_VIEWING_KEY: &str = "DELIGHTFUL";
 
-//     // === HELPERS ===
-//     fn init_helper() -> (
-//         StdResult<InitResponse>,
-//         Extern<MockStorage, MockApi, MockQuerier>,
-//     ) {
-//         let env = mock_env(MOCK_ADMIN, &[]);
-//         let mut deps = mock_dependencies(20, &[]);
-//         let msg = InitMsg { butt: mock_butt() };
-//         let init_result = init(&mut deps, env.clone(), msg);
-//         (init_result, deps)
-//     }
+    // === HELPERS ===
+    fn init_helper() -> (
+        StdResult<InitResponse>,
+        Extern<MockStorage, MockApi, MockQuerier>,
+    ) {
+        let env = mock_env(MOCK_ADMIN, &[]);
+        let mut deps = mock_dependencies(20, &[]);
+        let msg = InitMsg {
+            butt: mock_butt(),
+            dex_aggregator: mock_dex_aggregator(),
+            swbtc: mock_swbtc(),
+            butt_swbtc_trade_pair: mock_butt_swbtc_trade_pair(),
+            butt_swbtc_lp: mock_butt_swbtc_lp(),
+            viewing_key: MOCK_VIEWING_KEY.to_string(),
+        };
+        let init_result = init(&mut deps, env.clone(), msg);
+        (init_result, deps)
+    }
 
-//     fn mock_butt() -> SecretContract {
-//         SecretContract {
-//             address: HumanAddr::from(MOCK_BUTT_ADDRESS),
-//             contract_hash: "mock-butt-contract-hash".to_string(),
-//         }
-//     }
+    fn mock_butt() -> SecretContract {
+        SecretContract {
+            address: HumanAddr::from(MOCK_BUTT_ADDRESS),
+            contract_hash: "mock-butt-contract-hash".to_string(),
+        }
+    }
 
-//     fn mock_user_address() -> HumanAddr {
-//         HumanAddr::from("gary")
-//     }
+    fn mock_butt_swbtc_lp() -> SecretContract {
+        SecretContract {
+            address: HumanAddr::from("mock-butt-swbtc-lp-address"),
+            contract_hash: "mock-butt-swbtc-lp-contract-hash".to_string(),
+        }
+    }
 
-//     // === TESTS ===
-//     #[test]
-//     fn test_api_key() {
-//         let (_init_result, mut deps) = init_helper();
-//         let env = mock_env(mock_user_address(), &[]);
+    fn mock_butt_swbtc_trade_pair() -> SecretContract {
+        SecretContract {
+            address: HumanAddr::from(MOCK_BUTT_SWBTC_TRADE_PAIR_CONTRACT_ADDRESS),
+            contract_hash: "mock-butt-swbtc-trade-pair-contract-hash".to_string(),
+        }
+    }
 
-//         // when user sets an api key
-//         let handle_msg = HandleMsg::SetApiKey {
-//             api_key: MOCK_API_KEY.to_string(),
-//         };
-//         handle(&mut deps, env.clone(), handle_msg).unwrap();
-//         // = when api key for user is retrieved by the user
-//         let res = query(
-//             &deps,
-//             QueryMsg::ApiKey {
-//                 address: mock_user_address(),
-//                 butt_viewing_key: MOCK_VIEWING_KEY.to_string(),
-//                 admin: false,
-//             },
-//         );
-//         let api_key: String = from_binary(&res.unwrap()).unwrap();
-//         // = * it returns the api key for that user
-//         assert_eq!(api_key, MOCK_API_KEY.to_string());
+    fn mock_dex_aggregator() -> SecretContract {
+        SecretContract {
+            address: HumanAddr::from(MOCK_DEX_AGGREGATOR_ADDRESS),
+            contract_hash: "mock-dex-aggregator-contract-hash".to_string(),
+        }
+    }
 
-//         // = * when api key for user is retrieved by the admin
-//         let res = query(
-//             &deps,
-//             QueryMsg::ApiKey {
-//                 address: mock_user_address(),
-//                 butt_viewing_key: MOCK_VIEWING_KEY.to_string(),
-//                 admin: true,
-//             },
-//         );
-//         let api_key: String = from_binary(&res.unwrap()).unwrap();
-//         // = * it returns the api key for that user
-//         assert_eq!(api_key, MOCK_API_KEY.to_string());
+    fn mock_swbtc() -> SecretContract {
+        SecretContract {
+            address: HumanAddr::from(MOCK_SWBTC_ADDRESS),
+            contract_hash: "mock-swbtc-contract-hash".to_string(),
+        }
+    }
 
-//         // == when address does not have an api_key
-//         // == * it returns none
-//         let res = query(
-//             &deps,
-//             QueryMsg::ApiKey {
-//                 address: HumanAddr::from("Jules"),
-//                 butt_viewing_key: MOCK_VIEWING_KEY.to_string(),
-//                 admin: true,
-//             },
-//         );
-//         let api_key: Option<String> = from_binary(&res.unwrap()).unwrap();
-//         // = * it returns the api key for that user
-//         assert_eq!(api_key, None);
-//     }
+    fn mock_user_address() -> HumanAddr {
+        HumanAddr::from("gary")
+    }
 
-//     #[test]
-//     fn test_set_api_key() {
-//         let (_init_result, mut deps) = init_helper();
-//         let env = mock_env(mock_user_address(), &[]);
+    // === TESTS ===
+    #[test]
+    fn test_init() {
+        let (init_result, deps) = init_helper();
 
-//         // when user sets an api key
-//         let handle_msg = HandleMsg::SetApiKey {
-//             api_key: MOCK_API_KEY.to_string(),
-//         };
-//         handle(&mut deps, env.clone(), handle_msg).unwrap();
-//         // * it sets the api key for the user
-//         let store = ReadonlyPrefixedStorage::new(PREFIX_API_KEYS, &deps.storage);
-//         let store = TypedStore::<String, _>::attach(&store);
-//         let user_address_canonical: CanonicalAddr =
-//             deps.api.canonical_address(&mock_user_address()).unwrap();
-//         let api_key: Option<String> = store.may_load(user_address_canonical.as_slice()).unwrap();
-//         assert_eq!(api_key, Some(MOCK_API_KEY.to_string()));
-//     }
-// }
+        // * it stores the correct config
+        let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
+        assert_eq!(
+            config,
+            Config {
+                admin: HumanAddr::from(MOCK_ADMIN),
+                dex_aggregator: mock_dex_aggregator(),
+                butt: mock_butt(),
+                swbtc: mock_swbtc(),
+                butt_swbtc_trade_pair: mock_butt_swbtc_trade_pair(),
+                butt_swbtc_lp: mock_butt_swbtc_lp(),
+                viewing_key: MOCK_VIEWING_KEY.to_string(),
+            }
+        );
+
+        // * it sets the viewing key for BUTT, SWBTC & BUTT-SWBTC LP
+        assert_eq!(
+            init_result.unwrap().messages,
+            vec![
+                snip20::set_viewing_key_msg(
+                    MOCK_VIEWING_KEY.to_string(),
+                    None,
+                    1,
+                    mock_butt().contract_hash,
+                    mock_butt().address,
+                )
+                .unwrap(),
+                snip20::set_viewing_key_msg(
+                    MOCK_VIEWING_KEY.to_string(),
+                    None,
+                    1,
+                    mock_swbtc().contract_hash,
+                    mock_swbtc().address,
+                )
+                .unwrap(),
+                snip20::set_viewing_key_msg(
+                    MOCK_VIEWING_KEY.to_string(),
+                    None,
+                    1,
+                    mock_butt_swbtc_lp().contract_hash,
+                    mock_butt_swbtc_lp().address,
+                )
+                .unwrap(),
+            ]
+        );
+    }
+
+    // #[test]
+    // fn test_set_api_key() {
+    //     let (_init_result, mut deps) = init_helper();
+    //     let env = mock_env(mock_user_address(), &[]);
+
+    //     // when user sets an api key
+    //     let handle_msg = HandleMsg::SetApiKey {
+    //         api_key: MOCK_API_KEY.to_string(),
+    //     };
+    //     handle(&mut deps, env.clone(), handle_msg).unwrap();
+    //     // * it sets the api key for the user
+    //     let store = ReadonlyPrefixedStorage::new(PREFIX_API_KEYS, &deps.storage);
+    //     let store = TypedStore::<String, _>::attach(&store);
+    //     let user_address_canonical: CanonicalAddr =
+    //         deps.api.canonical_address(&mock_user_address()).unwrap();
+    //     let api_key: Option<String> = store.may_load(user_address_canonical.as_slice()).unwrap();
+    //     assert_eq!(api_key, Some(MOCK_API_KEY.to_string()));
+    // }
+}
