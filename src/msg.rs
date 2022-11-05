@@ -26,12 +26,9 @@ pub enum HandleMsg {
         sender: HumanAddr,
         from: HumanAddr,
         amount: Uint128,
-        msg: Binary,
+        msg: Option<Binary>,
     },
     SwapHalfOfSwbtcToButt {
-        config: Config,
-    },
-    ProvideLiquidityToTradePair {
         config: Config,
     },
     SendLpToUser {
