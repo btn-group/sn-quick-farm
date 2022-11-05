@@ -195,10 +195,10 @@ fn init_swap_and_provide<S: Storage, A: Api, Q: Querier>(
 }
 
 fn increase_allowance_for_pair_contract<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
+    deps: &mut cosmwasm_std::Extern<S, A, Q>,
 ) -> StdResult<HandleResponse> {
     let mut messages: Vec<CosmosMsg> = vec![];
-    let config: Config = TypedStoreMut::attach(&mut deps.storage).load(CONFIG_KEY)?;
+    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
     messages.push(secret_toolkit::snip20::increase_allowance_msg(
         config.butt_swbtc_trade_pair.address.clone(),
         Uint128(u128::MAX),
@@ -553,6 +553,7 @@ mod tests {
         );
     }
 
+    // === QUERY ===
     #[test]
     fn test_query_config() {
         let (_init_result, deps) = init_helper();
@@ -574,5 +575,43 @@ mod tests {
         )
         .unwrap();
         assert_eq!(config, config_from_query);
+    }
+
+    // === HANDLE ===
+    #[test]
+    fn test_increase_allowance_for_pair_contract() {
+        let (_init_result, mut deps) = init_helper();
+
+        // context when called by anyone
+        let env = mock_env(mock_user_address(), &[]);
+        // = * it increases the allowance for butt and swbtc
+        let handle_msg = HandleMsg::IncreaseAllowanceForPairContract {};
+        let handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
+        let handle_result_unwrapped = handle_result.unwrap();
+        assert_eq!(
+            handle_result_unwrapped.messages,
+            vec![
+                secret_toolkit::snip20::increase_allowance_msg(
+                    mock_butt_swbtc_trade_pair().address,
+                    Uint128(u128::MAX),
+                    None,
+                    None,
+                    BLOCK_SIZE,
+                    mock_butt().contract_hash,
+                    mock_butt().address,
+                )
+                .unwrap(),
+                secret_toolkit::snip20::increase_allowance_msg(
+                    mock_butt_swbtc_trade_pair().address,
+                    Uint128(u128::MAX),
+                    None,
+                    None,
+                    BLOCK_SIZE,
+                    mock_swbtc().contract_hash,
+                    mock_swbtc().address,
+                )
+                .unwrap()
+            ]
+        );
     }
 }
