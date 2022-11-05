@@ -7,7 +7,8 @@
     "butt_swbtc_lp",
     "butt_swbtc_trade_pair",
     "dex_aggregator",
-    "swbtc"
+    "swbtc",
+    "viewing_key"
   ],
   "properties": {
     "butt": {
@@ -24,6 +25,9 @@
     },
     "swbtc": {
       "$ref": "#/definitions/SecretContract"
+    },
+    "viewing_key": {
+      "type": "string"
     }
   },
   "definitions": {
