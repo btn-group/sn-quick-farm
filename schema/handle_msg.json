@@ -46,7 +46,6 @@
           "required": [
             "amount",
             "from",
-            "msg",
             "sender"
           ],
           "properties": {
@@ -57,7 +56,14 @@
               "$ref": "#/definitions/HumanAddr"
             },
             "msg": {
-              "$ref": "#/definitions/Binary"
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Binary"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "sender": {
               "$ref": "#/definitions/HumanAddr"
@@ -73,25 +79,6 @@
       ],
       "properties": {
         "swap_half_of_swbtc_to_butt": {
-          "type": "object",
-          "required": [
-            "config"
-          ],
-          "properties": {
-            "config": {
-              "$ref": "#/definitions/Config"
-            }
-          }
-        }
-      }
-    },
-    {
-      "type": "object",
-      "required": [
-        "provide_liquidity_to_trade_pair"
-      ],
-      "properties": {
-        "provide_liquidity_to_trade_pair": {
           "type": "object",
           "required": [
             "config"

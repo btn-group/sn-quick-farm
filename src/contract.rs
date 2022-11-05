@@ -70,9 +70,6 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
         HandleMsg::Receive {
             from, amount, msg, ..
         } => receive(deps, env, from, amount, msg),
-        HandleMsg::ProvideLiquidityToTradePair { config } => {
-            provide_liquidity_to_trade_pair(deps, &env, config)
-        }
         HandleMsg::RegisterTokens { tokens } => register_tokens(&env, tokens),
         HandleMsg::SendLpToUser {
             config,
@@ -114,21 +111,25 @@ fn receive<S: Storage, A: Api, Q: Querier>(
     env: Env,
     from: HumanAddr,
     amount: Uint128,
-    msg: Binary,
+    msg: Option<Binary>,
 ) -> StdResult<HandleResponse> {
-    let msg: ReceiveMsg = from_binary(&msg)?;
-    let response = match msg {
-        ReceiveMsg::InitSwapAndProvide {
-            dex_aggregator_msg,
-            first_token_contract_hash,
-        } => init_swap_and_provide(
-            deps,
-            &env,
-            from,
-            amount,
-            dex_aggregator_msg,
-            first_token_contract_hash,
-        ),
+    let response = if let Some(msg_unwrapped) = msg {
+        let msg: ReceiveMsg = from_binary(&msg_unwrapped)?;
+        match msg {
+            ReceiveMsg::InitSwapAndProvide {
+                dex_aggregator_msg,
+                first_token_contract_hash,
+            } => init_swap_and_provide(
+                deps,
+                &env,
+                from,
+                amount,
+                dex_aggregator_msg,
+                first_token_contract_hash,
+            ),
+        }
+    } else {
+        provide_liquidity_to_trade_pair(deps, &env, from, amount)
     };
     pad_response(response)
 }
@@ -167,21 +168,12 @@ fn init_swap_and_provide<S: Storage, A: Api, Q: Querier>(
         )?);
     }
 
-    // 3. Call function to swap half balance of SWBTC to BUTT, if the first token isn't swbtc
+    // 3. Call function to swap half balance of SWBTC to BUTT
+    // 4. Receive function to provide liquidity to trade pair
     messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: env.contract.address.clone(),
         callback_code_hash: env.contract_code_hash.clone(),
         msg: to_binary(&HandleMsg::SwapHalfOfSwbtcToButt {
-            config: config.clone(),
-        })?,
-        send: vec![],
-    }));
-
-    // 4. Call function to provide liquidity to trade pair
-    messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: env.contract.address.clone(),
-        callback_code_hash: env.contract_code_hash.clone(),
-        msg: to_binary(&HandleMsg::ProvideLiquidityToTradePair {
             config: config.clone(),
         })?,
         send: vec![],
@@ -283,9 +275,14 @@ fn pad_response(response: StdResult<HandleResponse>) -> StdResult<HandleResponse
 fn provide_liquidity_to_trade_pair<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: &Env,
-    config: Config,
+    from: HumanAddr,
+    amount: Uint128,
 ) -> StdResult<HandleResponse> {
-    authorize([env.message.sender.clone()].to_vec(), &env.contract.address)?;
+    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
+    // Test that the token is BUTT
+    authorize([env.message.sender.clone()].to_vec(), &config.butt.address)?;
+    // Test that the sender is from the trade pair
+    authorize([from].to_vec(), &config.butt_swbtc_trade_pair.address)?;
 
     // Query the contract's SWBTC balance
     let swbtc_balance_of_contract: Uint128 = query_balance_of_token(
@@ -295,13 +292,7 @@ fn provide_liquidity_to_trade_pair<S: Storage, A: Api, Q: Querier>(
         config.viewing_key.clone(),
     )
     .unwrap();
-    let butt_balance_of_contract: Uint128 = query_balance_of_token(
-        deps,
-        env.contract.address.clone(),
-        config.butt.clone(),
-        config.viewing_key,
-    )
-    .unwrap();
+    let butt_balance_of_contract: Uint128 = amount;
     // Provide liquidity to farm contract
     let provide_liquidity_msg = SecretSwapHandleMsg::ProvideLiquidity {
         assets: [
@@ -651,7 +642,7 @@ mod tests {
             sender: mock_user_address(),
             from: mock_user_address(),
             amount,
-            msg: to_binary(&receive_msg).unwrap(),
+            msg: Some(to_binary(&receive_msg).unwrap()),
         };
         let mut handle_result = handle(&mut deps, env, handle_msg.clone());
         // * it raises an error
@@ -674,15 +665,6 @@ mod tests {
                     contract_addr: env.contract.address.clone(),
                     callback_code_hash: env.contract_code_hash.clone(),
                     msg: to_binary(&HandleMsg::SwapHalfOfSwbtcToButt {
-                        config: config.clone(),
-                    })
-                    .unwrap(),
-                    send: vec![],
-                }),
-                CosmosMsg::Wasm(WasmMsg::Execute {
-                    contract_addr: env.contract.address.clone(),
-                    callback_code_hash: env.contract_code_hash.clone(),
-                    msg: to_binary(&HandleMsg::ProvideLiquidityToTradePair {
                         config: config.clone(),
                     })
                     .unwrap(),
@@ -735,15 +717,6 @@ mod tests {
                 CosmosMsg::Wasm(WasmMsg::Execute {
                     contract_addr: env.contract.address.clone(),
                     callback_code_hash: env.contract_code_hash.clone(),
-                    msg: to_binary(&HandleMsg::ProvideLiquidityToTradePair {
-                        config: config.clone(),
-                    })
-                    .unwrap(),
-                    send: vec![],
-                }),
-                CosmosMsg::Wasm(WasmMsg::Execute {
-                    contract_addr: env.contract.address.clone(),
-                    callback_code_hash: env.contract_code_hash.clone(),
                     msg: to_binary(&HandleMsg::SendLpToUser {
                         config,
                         user_address: mock_user_address(),
@@ -764,7 +737,7 @@ mod tests {
             sender: mock_user_address(),
             from: mock_user_address(),
             amount,
-            msg: to_binary(&receive_msg).unwrap(),
+            msg: Some(to_binary(&receive_msg).unwrap()),
         };
         // = * it raises an error
         handle_result = handle(&mut deps, env.clone(), handle_msg);
@@ -780,32 +753,48 @@ mod tests {
     #[test]
     fn test_provide_liquidity_to_trade_pair() {
         let (_init_result, mut deps) = init_helper();
+        let butt_amount: Uint128 = Uint128(5);
         let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
-        let add_liquidity_to_pair_contract_msg = HandleMsg::ProvideLiquidityToTradePair {
-            config: config.clone(),
-        };
 
-        // when called by non-contract
-        let mut env = mock_env(MOCK_ADMIN, &[]);
+        // when called by non-butt
+        let mut env = mock_env(mock_swbtc().address, &[]);
+        let mut handle_msg = HandleMsg::Receive {
+            sender: config.butt_swbtc_trade_pair.address.clone(),
+            from: config.butt_swbtc_trade_pair.address.clone(),
+            amount: butt_amount,
+            msg: None,
+        };
+        let mut handle_result = handle(&mut deps, env, handle_msg.clone());
         // = * it raises an unauthorized error
-        let mut handle_result = handle(
-            &mut deps,
-            env.clone(),
-            add_liquidity_to_pair_contract_msg.clone(),
-        );
         assert_eq!(
             handle_result.unwrap_err(),
             StdError::Unauthorized { backtrace: None }
         );
 
-        // when called by contract
-        env = mock_env(env.contract.address, &[]);
-        // = * it provides the balance of BUTT and SWBTC of contract to trade pair contract
-        handle_result = handle(
-            &mut deps,
-            env.clone(),
-            add_liquidity_to_pair_contract_msg.clone(),
+        // = when called by BUTT
+        env = mock_env(mock_butt().address, &[]);
+        // == when called from non butt_swbtc_trade_pair
+        handle_msg = HandleMsg::Receive {
+            sender: config.butt_swbtc_lp.address.clone(),
+            from: config.butt_swbtc_lp.address,
+            amount: butt_amount,
+            msg: None,
+        };
+        handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
+        // == * it raises an unauthorized error
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::Unauthorized { backtrace: None }
         );
+        // === when called from butt_swbtc_trade_pair
+        handle_msg = HandleMsg::Receive {
+            sender: config.butt_swbtc_trade_pair.address.clone(),
+            from: config.butt_swbtc_trade_pair.address,
+            amount: butt_amount,
+            msg: None,
+        };
+        handle_result = handle(&mut deps, env, handle_msg.clone());
+        // === * it provides the balance of BUTT and SWBTC of contract to trade pair contract
         let handle_result_unwrapped = handle_result.unwrap();
         let provide_liquidity_msg = SecretSwapHandleMsg::ProvideLiquidity {
             assets: [
@@ -818,7 +807,7 @@ mod tests {
                     },
                 },
                 Asset {
-                    amount: Uint128(MOCK_AMOUNT),
+                    amount: butt_amount,
                     info: AssetInfo::Token {
                         contract_addr: config.butt.address,
                         token_code_hash: config.butt.contract_hash.clone(),
