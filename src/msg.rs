@@ -1,5 +1,5 @@
 use crate::constants::BLOCK_SIZE;
-use crate::state::{Config, SecretContract};
+use crate::state::SecretContract;
 use cosmwasm_std::{Binary, Decimal, HumanAddr, Uint128};
 use schemars::JsonSchema;
 use secret_toolkit::utils::HandleCallback;
@@ -33,13 +33,8 @@ pub enum HandleMsg {
         denom: Option<String>,
         token: Option<SecretContract>,
     },
-    SwapHalfOfSwbtcToButt {
-        config: Config,
-    },
-    SendLpToUser {
-        config: Config,
-        user_address: HumanAddr,
-    },
+    SwapHalfOfSwbtcToButt {},
+    SendLpToUser {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

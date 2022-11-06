@@ -114,15 +114,7 @@
       ],
       "properties": {
         "swap_half_of_swbtc_to_butt": {
-          "type": "object",
-          "required": [
-            "config"
-          ],
-          "properties": {
-            "config": {
-              "$ref": "#/definitions/Config"
-            }
-          }
+          "type": "object"
         }
       }
     },
@@ -133,19 +125,7 @@
       ],
       "properties": {
         "send_lp_to_user": {
-          "type": "object",
-          "required": [
-            "config",
-            "user_address"
-          ],
-          "properties": {
-            "config": {
-              "$ref": "#/definitions/Config"
-            },
-            "user_address": {
-              "$ref": "#/definitions/HumanAddr"
-            }
-          }
+          "type": "object"
         }
       }
     }
@@ -154,41 +134,6 @@
     "Binary": {
       "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>",
       "type": "string"
-    },
-    "Config": {
-      "type": "object",
-      "required": [
-        "admin",
-        "butt",
-        "butt_swbtc_lp",
-        "butt_swbtc_trade_pair",
-        "dex_aggregator",
-        "swbtc",
-        "viewing_key"
-      ],
-      "properties": {
-        "admin": {
-          "$ref": "#/definitions/HumanAddr"
-        },
-        "butt": {
-          "$ref": "#/definitions/SecretContract"
-        },
-        "butt_swbtc_lp": {
-          "$ref": "#/definitions/SecretContract"
-        },
-        "butt_swbtc_trade_pair": {
-          "$ref": "#/definitions/SecretContract"
-        },
-        "dex_aggregator": {
-          "$ref": "#/definitions/SecretContract"
-        },
-        "swbtc": {
-          "$ref": "#/definitions/SecretContract"
-        },
-        "viewing_key": {
-          "type": "string"
-        }
-      }
     },
     "HumanAddr": {
       "type": "string"
