@@ -348,9 +348,12 @@ fn query_balance_of_token<S: Storage, A: Api, Q: Querier>(
 ) -> StdResult<Uint128> {
     if token.address == HumanAddr::from(MOCK_BUTT_ADDRESS) {
         Ok(Uint128(MOCK_AMOUNT))
-    } else if token.address == HumanAddr::from(MOCK_SWBTC_ADDRESS) {
-        Ok(Uint128(MOCK_AMOUNT_TWO))
-    } else if token.address == HumanAddr::from(MOCK_BUTT_SWBTC_LP_ADDRESS) {
+    } else if vec![
+        HumanAddr::from(MOCK_SWBTC_ADDRESS),
+        HumanAddr::from(MOCK_BUTT_SWBTC_LP_ADDRESS),
+    ]
+    .contains(&token.address)
+    {
         Ok(Uint128(MOCK_AMOUNT_TWO))
     } else {
         let balance = snip20::balance_query(
