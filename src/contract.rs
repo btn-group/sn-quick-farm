@@ -77,7 +77,9 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             denom,
             token,
         } => rescue_tokens(deps, &env, amount, denom, token),
-        HandleMsg::SendLpToUser {} => send_lp_to_user(deps, &env),
+        HandleMsg::SendLpToUserThenDepositIntoFarmContract {} => {
+            send_lp_to_user_then_deposit_into_farm_contract(deps, &env)
+        }
         HandleMsg::SwapHalfOfSwbtcToButt {} => swap_half_of_swbtc_to_butt(deps, &env),
     }
 }
@@ -176,7 +178,7 @@ fn init_swap_and_provide<S: Storage, A: Api, Q: Querier>(
     messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: env.contract.address.clone(),
         callback_code_hash: env.contract_code_hash.clone(),
-        msg: to_binary(&HandleMsg::SendLpToUser {})?,
+        msg: to_binary(&HandleMsg::SendLpToUserThenDepositIntoFarmContract {})?,
         send: vec![],
     }));
 
@@ -420,7 +422,7 @@ fn register_tokens(env: &Env, tokens: Vec<SecretContract>) -> StdResult<HandleRe
     })
 }
 
-fn send_lp_to_user<S: Storage, A: Api, Q: Querier>(
+fn send_lp_to_user_then_deposit_into_farm_contract<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: &Env,
 ) -> StdResult<HandleResponse> {
@@ -690,7 +692,7 @@ mod tests {
                 CosmosMsg::Wasm(WasmMsg::Execute {
                     contract_addr: env.contract.address.clone(),
                     callback_code_hash: env.contract_code_hash.clone(),
-                    msg: to_binary(&HandleMsg::SendLpToUser {}).unwrap(),
+                    msg: to_binary(&HandleMsg::SendLpToUserThenDepositIntoFarmContract {}).unwrap(),
                     send: vec![],
                 })
             ]
@@ -732,7 +734,7 @@ mod tests {
                 CosmosMsg::Wasm(WasmMsg::Execute {
                     contract_addr: env.contract.address.clone(),
                     callback_code_hash: env.contract_code_hash.clone(),
-                    msg: to_binary(&HandleMsg::SendLpToUser {}).unwrap(),
+                    msg: to_binary(&HandleMsg::SendLpToUserThenDepositIntoFarmContract {}).unwrap(),
                     send: vec![],
                 })
             ]
@@ -943,10 +945,10 @@ mod tests {
     }
 
     #[test]
-    fn test_send_lp_to_user() {
+    fn test_send_lp_to_user_then_deposit_into_farm_contract() {
         let (_init_result, mut deps) = init_helper();
         let mut config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
-        let handle_msg = HandleMsg::SendLpToUser {};
+        let handle_msg = HandleMsg::SendLpToUserThenDepositIntoFarmContract {};
 
         // when called by non-contract
         let mut env = mock_env(MOCK_ADMIN, &[]);

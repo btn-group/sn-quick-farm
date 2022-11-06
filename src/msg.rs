@@ -34,7 +34,7 @@ pub enum HandleMsg {
         token: Option<SecretContract>,
     },
     SwapHalfOfSwbtcToButt {},
-    SendLpToUser {},
+    SendLpToUserThenDepositIntoFarmContract {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
