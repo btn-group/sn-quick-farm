@@ -86,22 +86,12 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
 
 pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryMsg) -> QueryResult {
     match msg {
-        QueryMsg::Config { admin_viewing_key } => query_config(deps, admin_viewing_key),
+        QueryMsg::Config {} => query_config(deps),
     }
 }
 
-fn query_config<S: Storage, A: Api, Q: Querier>(
-    deps: &Extern<S, A, Q>,
-    admin_viewing_key: String,
-) -> StdResult<Binary> {
+fn query_config<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<Binary> {
     let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
-    // This is here to check the admin's viewing key
-    query_balance_of_token(
-        deps,
-        config.admin.clone(),
-        config.butt.clone(),
-        admin_viewing_key,
-    )?;
 
     to_binary(&config)
 }
@@ -584,22 +574,8 @@ mod tests {
     fn test_query_config() {
         let (_init_result, deps) = init_helper();
         let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
-
-        // when admin has a butt viewing key
-        // = when admin submit the wrong butt viewing key, this will just have to be tested live
-
-        // = when admin submits the right butt viewing key
-        // =  it returns the config
-        let config_from_query: Config = from_binary(
-            &query(
-                &deps,
-                QueryMsg::Config {
-                    admin_viewing_key: MOCK_VIEWING_KEY.to_string(),
-                },
-            )
-            .unwrap(),
-        )
-        .unwrap();
+        let config_from_query: Config =
+            from_binary(&query(&deps, QueryMsg::Config {}).unwrap()).unwrap();
         assert_eq!(config, config_from_query);
     }
 
