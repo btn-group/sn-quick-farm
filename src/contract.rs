@@ -95,7 +95,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
 fn query_config<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<Binary> {
     let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
 
-    to_binary(&config)
+    to_binary(&config.without_viewing_key()?)
 }
 
 fn receive<S: Storage, A: Api, Q: Querier>(
@@ -476,7 +476,7 @@ fn space_pad(block_size: usize, message: &mut Vec<u8>) -> &mut Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::SecretContract;
+    use crate::state::{ConfigWithoutViewingKey, SecretContract};
     use cosmwasm_std::testing::{mock_dependencies, mock_env, MockApi, MockQuerier, MockStorage};
     pub const MOCK_ADMIN: &str = "admin";
     pub const MOCK_DEX_AGGREGATOR_ADDRESS: &str = "mock-dex-aggregator-address";
@@ -598,9 +598,9 @@ mod tests {
     fn test_query_config() {
         let (_init_result, deps) = init_helper();
         let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
-        let config_from_query: Config =
+        let config_from_query: ConfigWithoutViewingKey =
             from_binary(&query(&deps, QueryMsg::Config {}).unwrap()).unwrap();
-        assert_eq!(config, config_from_query);
+        assert_eq!(config.without_viewing_key().unwrap(), config_from_query);
     }
 
     // === HANDLE ===
