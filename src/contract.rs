@@ -447,16 +447,31 @@ fn send_lp_to_user_then_deposit_into_farm_contract<S: Storage, A: Api, Q: Querie
 
         config.current_user = None;
         TypedStoreMut::attach(&mut deps.storage).store(CONFIG_KEY, &config)?;
+        let mut messages: Vec<CosmosMsg> = vec![];
+        messages.push(snip20::transfer_msg(
+            current_user_unwrapped,
+            lp_balance_of_contract,
+            None,
+            BLOCK_SIZE,
+            config.butt_swbtc_lp.contract_hash,
+            config.butt_swbtc_lp.address,
+        )?);
+        messages.push(snip20::send_from_msg(
+            current_user_unwrapped,
+            config.butt_swbtc_farm_pool.address,
+            lp_balance_of_contract,
+            Some(Binary::from(
+                r#"{ "deposit_incentivized_token": {} }"#.as_bytes(),
+            )),
+            None,
+            None,
+            BLOCK_SIZE,
+            config.butt_swbtc_lp.contract_hash,
+            config.butt_swbtc_lp.address,
+        )?);
 
         Ok(HandleResponse {
-            messages: vec![snip20::transfer_msg(
-                current_user_unwrapped,
-                lp_balance_of_contract,
-                None,
-                BLOCK_SIZE,
-                config.butt_swbtc_lp.contract_hash,
-                config.butt_swbtc_lp.address,
-            )?],
+            messages,
             log: vec![],
             data: None,
         })
