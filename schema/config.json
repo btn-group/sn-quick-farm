@@ -24,6 +24,16 @@
     "butt_swbtc_trade_pair": {
       "$ref": "#/definitions/SecretContract"
     },
+    "current_user": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/HumanAddr"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "dex_aggregator": {
       "$ref": "#/definitions/SecretContract"
     },

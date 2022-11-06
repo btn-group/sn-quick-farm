@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {
     pub admin: HumanAddr,
+    pub current_user: Option<HumanAddr>,
     pub dex_aggregator: SecretContract,
     pub butt: SecretContract,
     pub swbtc: SecretContract,
@@ -13,8 +14,8 @@ pub struct Config {
     pub viewing_key: String,
 }
 impl Config {
-    pub fn without_viewing_key(self) -> StdResult<ConfigWithoutViewingKey> {
-        Ok(ConfigWithoutViewingKey {
+    pub fn with_public_attributes(self) -> StdResult<ConfigPublic> {
+        Ok(ConfigPublic {
             admin: self.admin,
             dex_aggregator: self.dex_aggregator,
             butt: self.butt,
@@ -26,7 +27,7 @@ impl Config {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct ConfigWithoutViewingKey {
+pub struct ConfigPublic {
     pub admin: HumanAddr,
     pub dex_aggregator: SecretContract,
     pub butt: SecretContract,

@@ -21,6 +21,7 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     let mut config_store = TypedStoreMut::attach(&mut deps.storage);
     let config: Config = Config {
         admin: env.message.sender,
+        current_user: None,
         dex_aggregator: msg.dex_aggregator,
         butt: msg.butt,
         swbtc: msg.swbtc,
@@ -76,13 +77,8 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             denom,
             token,
         } => rescue_tokens(deps, &env, amount, denom, token),
-        HandleMsg::SendLpToUser {
-            config,
-            user_address,
-        } => send_lp_to_user(deps, &env, config, user_address),
-        HandleMsg::SwapHalfOfSwbtcToButt { config } => {
-            swap_half_of_swbtc_to_butt(deps, &env, config)
-        }
+        HandleMsg::SendLpToUser {} => send_lp_to_user(deps, &env),
+        HandleMsg::SwapHalfOfSwbtcToButt {} => swap_half_of_swbtc_to_butt(deps, &env),
     }
 }
 
@@ -95,7 +91,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
 fn query_config<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<Binary> {
     let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
 
-    to_binary(&config.without_viewing_key()?)
+    to_binary(&config.with_public_attributes()?)
 }
 
 fn receive<S: Storage, A: Api, Q: Querier>(
@@ -135,10 +131,17 @@ fn init_swap_and_provide<S: Storage, A: Api, Q: Querier>(
     first_token_contract_hash: String,
 ) -> StdResult<HandleResponse> {
     // 1. Make sure token isn't BUTT
-    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
+    let mut config_store = TypedStoreMut::attach(&mut deps.storage);
+    let mut config: Config = config_store.load(CONFIG_KEY).unwrap();
     if config.butt.address == env.message.sender {
         return Err(StdError::generic_err("First token can't be BUTT."));
     };
+    if config.current_user.is_some() {
+        return Err(StdError::generic_err("Contract is already being used."));
+    } else {
+        config.current_user = Some(from);
+        config_store.store(CONFIG_KEY, &config)?;
+    }
 
     let mut messages: Vec<CosmosMsg> = vec![];
     // 2. Swap to DEX aggregator if first token is not butt
@@ -150,7 +153,7 @@ fn init_swap_and_provide<S: Storage, A: Api, Q: Querier>(
         }
 
         messages.push(snip20::send_msg(
-            config.dex_aggregator.address.clone(),
+            config.dex_aggregator.address,
             amount,
             dex_aggregator_msg,
             None,
@@ -165,9 +168,7 @@ fn init_swap_and_provide<S: Storage, A: Api, Q: Querier>(
     messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: env.contract.address.clone(),
         callback_code_hash: env.contract_code_hash.clone(),
-        msg: to_binary(&HandleMsg::SwapHalfOfSwbtcToButt {
-            config: config.clone(),
-        })?,
+        msg: to_binary(&HandleMsg::SwapHalfOfSwbtcToButt {})?,
         send: vec![],
     }));
 
@@ -175,10 +176,7 @@ fn init_swap_and_provide<S: Storage, A: Api, Q: Querier>(
     messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: env.contract.address.clone(),
         callback_code_hash: env.contract_code_hash.clone(),
-        msg: to_binary(&HandleMsg::SendLpToUser {
-            config,
-            user_address: from,
-        })?,
+        msg: to_binary(&HandleMsg::SendLpToUser {})?,
         send: vec![],
     }));
 
@@ -264,9 +262,9 @@ fn rescue_tokens<S: Storage, A: Api, Q: Querier>(
 fn swap_half_of_swbtc_to_butt<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: &Env,
-    config: Config,
 ) -> StdResult<HandleResponse> {
     authorize([env.message.sender.clone()].to_vec(), &env.contract.address)?;
+    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
 
     let mut messages: Vec<CosmosMsg> = vec![];
     // Query the contract's SWBTC balance
@@ -425,38 +423,44 @@ fn register_tokens(env: &Env, tokens: Vec<SecretContract>) -> StdResult<HandleRe
 fn send_lp_to_user<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: &Env,
-    config: Config,
-    user_address: HumanAddr,
 ) -> StdResult<HandleResponse> {
     authorize([env.message.sender.clone()].to_vec(), &env.contract.address)?;
+    let mut config: Config = TypedStoreMut::attach(&mut deps.storage)
+        .load(CONFIG_KEY)
+        .unwrap();
+    if let Some(current_user_unwrapped) = config.current_user {
+        // Query the contract's SWBTC balance
+        let lp_balance_of_contract: Uint128 = query_balance_of_token(
+            deps,
+            env.contract.address.clone(),
+            config.butt_swbtc_lp.clone(),
+            config.viewing_key.clone(),
+        )
+        .unwrap();
+        if lp_balance_of_contract.is_zero() {
+            return Err(StdError::generic_err(
+                "Contract BUTT-SWBTC LP balance must be greater than zero.",
+            ));
+        }
 
-    // Query the contract's SWBTC balance
-    let lp_balance_of_contract: Uint128 = query_balance_of_token(
-        deps,
-        env.contract.address.clone(),
-        config.butt_swbtc_lp.clone(),
-        config.viewing_key,
-    )
-    .unwrap();
+        config.current_user = None;
+        TypedStoreMut::attach(&mut deps.storage).store(CONFIG_KEY, &config)?;
 
-    if lp_balance_of_contract.is_zero() {
-        return Err(StdError::generic_err(
-            "Contract BUTT-SWBTC LP balance must be greater than zero.",
-        ));
+        Ok(HandleResponse {
+            messages: vec![snip20::transfer_msg(
+                current_user_unwrapped,
+                lp_balance_of_contract,
+                None,
+                BLOCK_SIZE,
+                config.butt_swbtc_lp.contract_hash,
+                config.butt_swbtc_lp.address,
+            )?],
+            log: vec![],
+            data: None,
+        })
+    } else {
+        Err(StdError::generic_err("Contract wasn't called properly."))
     }
-
-    Ok(HandleResponse {
-        messages: vec![snip20::transfer_msg(
-            user_address,
-            lp_balance_of_contract,
-            None,
-            BLOCK_SIZE,
-            config.butt_swbtc_lp.contract_hash,
-            config.butt_swbtc_lp.address,
-        )?],
-        log: vec![],
-        data: None,
-    })
 }
 
 // Take a Vec<u8> and pad it up to a multiple of `block_size`, using spaces at the end.
@@ -476,7 +480,7 @@ fn space_pad(block_size: usize, message: &mut Vec<u8>) -> &mut Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{ConfigWithoutViewingKey, SecretContract};
+    use crate::state::{ConfigPublic, SecretContract};
     use cosmwasm_std::testing::{mock_dependencies, mock_env, MockApi, MockQuerier, MockStorage};
     pub const MOCK_ADMIN: &str = "admin";
     pub const MOCK_DEX_AGGREGATOR_ADDRESS: &str = "mock-dex-aggregator-address";
@@ -552,6 +556,7 @@ mod tests {
             config,
             Config {
                 admin: HumanAddr::from(MOCK_ADMIN),
+                current_user: None,
                 dex_aggregator: mock_dex_aggregator(),
                 butt: mock_butt(),
                 swbtc: mock_swbtc(),
@@ -598,9 +603,9 @@ mod tests {
     fn test_query_config() {
         let (_init_result, deps) = init_helper();
         let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
-        let config_from_query: ConfigWithoutViewingKey =
+        let config_from_query: ConfigPublic =
             from_binary(&query(&deps, QueryMsg::Config {}).unwrap()).unwrap();
-        assert_eq!(config.without_viewing_key().unwrap(), config_from_query);
+        assert_eq!(config.with_public_attributes().unwrap(), config_from_query);
     }
 
     // === HANDLE ===
@@ -645,7 +650,7 @@ mod tests {
     fn test_init_swap_and_provide() {
         let (_init_result, mut deps) = init_helper();
         let amount: Uint128 = Uint128(2);
-        let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
+        let mut config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
         let mut dex_aggregator_msg: Option<Binary> = Some(to_binary(&123).unwrap());
         let mut receive_msg = ReceiveMsg::InitSwapAndProvide {
             dex_aggregator_msg: dex_aggregator_msg.clone(),
@@ -679,20 +684,13 @@ mod tests {
                 CosmosMsg::Wasm(WasmMsg::Execute {
                     contract_addr: env.contract.address.clone(),
                     callback_code_hash: env.contract_code_hash.clone(),
-                    msg: to_binary(&HandleMsg::SwapHalfOfSwbtcToButt {
-                        config: config.clone(),
-                    })
-                    .unwrap(),
+                    msg: to_binary(&HandleMsg::SwapHalfOfSwbtcToButt {}).unwrap(),
                     send: vec![],
                 }),
                 CosmosMsg::Wasm(WasmMsg::Execute {
                     contract_addr: env.contract.address.clone(),
                     callback_code_hash: env.contract_code_hash.clone(),
-                    msg: to_binary(&HandleMsg::SendLpToUser {
-                        config: config.clone(),
-                        user_address: mock_user_address(),
-                    })
-                    .unwrap(),
+                    msg: to_binary(&HandleMsg::SendLpToUser {}).unwrap(),
                     send: vec![],
                 })
             ]
@@ -700,6 +698,11 @@ mod tests {
 
         // when token sent in is not swbtc or butt
         env = mock_env(mock_butt_swbtc_lp().address, &[]);
+        // NEED TO RESET config.current_user set from previous test
+        config.current_user = None;
+        TypedStoreMut::attach(&mut deps.storage)
+            .store(CONFIG_KEY, &config)
+            .unwrap();
         // = when dex_aggregator_msg is present
         // = * it calls the function to swap to DEX aggregator
         // = * it calls the functions to swap half of SWBTC to BUTT
@@ -723,26 +726,24 @@ mod tests {
                 CosmosMsg::Wasm(WasmMsg::Execute {
                     contract_addr: env.contract.address.clone(),
                     callback_code_hash: env.contract_code_hash.clone(),
-                    msg: to_binary(&HandleMsg::SwapHalfOfSwbtcToButt {
-                        config: config.clone(),
-                    })
-                    .unwrap(),
+                    msg: to_binary(&HandleMsg::SwapHalfOfSwbtcToButt {}).unwrap(),
                     send: vec![],
                 }),
                 CosmosMsg::Wasm(WasmMsg::Execute {
                     contract_addr: env.contract.address.clone(),
                     callback_code_hash: env.contract_code_hash.clone(),
-                    msg: to_binary(&HandleMsg::SendLpToUser {
-                        config,
-                        user_address: mock_user_address(),
-                    })
-                    .unwrap(),
+                    msg: to_binary(&HandleMsg::SendLpToUser {}).unwrap(),
                     send: vec![],
                 })
             ]
         );
 
         // = when dex_aggregator_msg is missing
+        // NEED TO RESET config.current_user set from previous test
+        config.current_user = None;
+        TypedStoreMut::attach(&mut deps.storage)
+            .store(CONFIG_KEY, &config)
+            .unwrap();
         dex_aggregator_msg = None;
         receive_msg = ReceiveMsg::InitSwapAndProvide {
             dex_aggregator_msg,
@@ -944,11 +945,8 @@ mod tests {
     #[test]
     fn test_send_lp_to_user() {
         let (_init_result, mut deps) = init_helper();
-        let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
-        let handle_msg = HandleMsg::SendLpToUser {
-            config: config.clone(),
-            user_address: mock_user_address(),
-        };
+        let mut config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
+        let handle_msg = HandleMsg::SendLpToUser {};
 
         // when called by non-contract
         let mut env = mock_env(MOCK_ADMIN, &[]);
@@ -961,14 +959,27 @@ mod tests {
 
         // when called by contract
         env = mock_env(env.contract.address, &[]);
-        // = when contract's balance of butt-swbtc-lp is zero
+        // = when config current_user is missing
+        // = * it raises an error
+        handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::generic_err("Contract wasn't called properly.")
+        );
+
+        // = when config current_user is present
+        config.current_user = Some(mock_user_address());
+        TypedStoreMut::attach(&mut deps.storage)
+            .store(CONFIG_KEY, &config)
+            .unwrap();
+        // == when contract's balance of butt-swbtc-lp is zero
         // == * it raises an error
         // handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
         // assert_eq!(
         //     handle_result.unwrap_err(),
         //     StdError::generic_err("Result BUTT-SWBTC LP must be greater than zero.",)
         // );
-        // = when contract's balance of butt-swbtc-lp is greater than zero
+        // == when contract's balance of butt-swbtc-lp is greater than zero
         // == * it sends the balance of the toke to the user
         handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
         let handle_result_unwrapped = handle_result.unwrap();
@@ -991,9 +1002,7 @@ mod tests {
     fn test_swap_half_of_swbtc_to_butt() {
         let (_init_result, mut deps) = init_helper();
         let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
-        let handle_msg = HandleMsg::SwapHalfOfSwbtcToButt {
-            config: config.clone(),
-        };
+        let handle_msg = HandleMsg::SwapHalfOfSwbtcToButt {};
 
         // when called by non-contract
         let mut env = mock_env(MOCK_ADMIN, &[]);
