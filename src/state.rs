@@ -9,6 +9,7 @@ pub struct Config {
     pub dex_aggregator: SecretContract,
     pub butt: SecretContract,
     pub swbtc: SecretContract,
+    pub butt_swbtc_farm_pool: SecretContract,
     pub butt_swbtc_trade_pair: SecretContract,
     pub butt_swbtc_lp: SecretContract,
     pub viewing_key: String,
@@ -20,6 +21,7 @@ impl Config {
             dex_aggregator: self.dex_aggregator,
             butt: self.butt,
             swbtc: self.swbtc,
+            butt_swbtc_farm_pool: self.butt_swbtc_farm_pool,
             butt_swbtc_trade_pair: self.butt_swbtc_trade_pair,
             butt_swbtc_lp: self.butt_swbtc_lp,
         })
@@ -32,6 +34,7 @@ pub struct ConfigPublic {
     pub dex_aggregator: SecretContract,
     pub butt: SecretContract,
     pub swbtc: SecretContract,
+    pub butt_swbtc_farm_pool: SecretContract,
     pub butt_swbtc_trade_pair: SecretContract,
     pub butt_swbtc_lp: SecretContract,
 }

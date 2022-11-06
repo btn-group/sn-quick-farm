@@ -25,6 +25,7 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
         dex_aggregator: msg.dex_aggregator,
         butt: msg.butt,
         swbtc: msg.swbtc,
+        butt_swbtc_farm_pool: msg.butt_swbtc_farm_pool,
         butt_swbtc_trade_pair: msg.butt_swbtc_trade_pair,
         butt_swbtc_lp: msg.butt_swbtc_lp,
         viewing_key: msg.viewing_key,
@@ -449,12 +450,12 @@ fn send_lp_to_user_then_deposit_into_farm_contract<S: Storage, A: Api, Q: Querie
         TypedStoreMut::attach(&mut deps.storage).store(CONFIG_KEY, &config)?;
         let mut messages: Vec<CosmosMsg> = vec![];
         messages.push(snip20::transfer_msg(
-            current_user_unwrapped,
+            current_user_unwrapped.clone(),
             lp_balance_of_contract,
             None,
             BLOCK_SIZE,
-            config.butt_swbtc_lp.contract_hash,
-            config.butt_swbtc_lp.address,
+            config.butt_swbtc_lp.contract_hash.clone(),
+            config.butt_swbtc_lp.address.clone(),
         )?);
         messages.push(snip20::send_from_msg(
             current_user_unwrapped,
@@ -463,7 +464,6 @@ fn send_lp_to_user_then_deposit_into_farm_contract<S: Storage, A: Api, Q: Querie
             Some(Binary::from(
                 r#"{ "deposit_incentivized_token": {} }"#.as_bytes(),
             )),
-            None,
             None,
             BLOCK_SIZE,
             config.butt_swbtc_lp.contract_hash,
@@ -515,6 +515,7 @@ mod tests {
             butt: mock_butt(),
             dex_aggregator: mock_dex_aggregator(),
             swbtc: mock_swbtc(),
+            butt_swbtc_farm_pool: mock_butt_swbtc_farm_pool(),
             butt_swbtc_trade_pair: mock_butt_swbtc_trade_pair(),
             butt_swbtc_lp: mock_butt_swbtc_lp(),
             viewing_key: MOCK_VIEWING_KEY.to_string(),
@@ -527,6 +528,13 @@ mod tests {
         SecretContract {
             address: HumanAddr::from(MOCK_BUTT_ADDRESS),
             contract_hash: "mock-butt-contract-hash".to_string(),
+        }
+    }
+
+    fn mock_butt_swbtc_farm_pool() -> SecretContract {
+        SecretContract {
+            address: HumanAddr::from("mock-butt-swbtc-farm-pool-address"),
+            contract_hash: "mock-butt-swbtc-farm-pool-contract-hash".to_string(),
         }
     }
 
@@ -577,6 +585,7 @@ mod tests {
                 dex_aggregator: mock_dex_aggregator(),
                 butt: mock_butt(),
                 swbtc: mock_swbtc(),
+                butt_swbtc_farm_pool: mock_butt_swbtc_farm_pool(),
                 butt_swbtc_trade_pair: mock_butt_swbtc_trade_pair(),
                 butt_swbtc_lp: mock_butt_swbtc_lp(),
                 viewing_key: MOCK_VIEWING_KEY.to_string(),
@@ -1003,15 +1012,30 @@ mod tests {
         // * it sends a message to register receive for the token
         assert_eq!(
             handle_result_unwrapped.messages,
-            vec![snip20::transfer_msg(
-                mock_user_address(),
-                Uint128(MOCK_AMOUNT_TWO),
-                None,
-                BLOCK_SIZE,
-                config.butt_swbtc_lp.contract_hash,
-                config.butt_swbtc_lp.address,
-            )
-            .unwrap()]
+            vec![
+                snip20::transfer_msg(
+                    mock_user_address(),
+                    Uint128(MOCK_AMOUNT_TWO),
+                    None,
+                    BLOCK_SIZE,
+                    config.butt_swbtc_lp.contract_hash.clone(),
+                    config.butt_swbtc_lp.address.clone(),
+                )
+                .unwrap(),
+                snip20::send_from_msg(
+                    mock_user_address(),
+                    config.butt_swbtc_farm_pool.address,
+                    Uint128(MOCK_AMOUNT_TWO),
+                    Some(Binary::from(
+                        r#"{ "deposit_incentivized_token": {} }"#.as_bytes(),
+                    )),
+                    None,
+                    BLOCK_SIZE,
+                    config.butt_swbtc_lp.contract_hash,
+                    config.butt_swbtc_lp.address,
+                )
+                .unwrap()
+            ]
         );
     }
 
