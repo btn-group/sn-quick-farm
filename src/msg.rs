@@ -35,9 +35,6 @@ pub enum HandleMsg {
         config: Config,
         user_address: HumanAddr,
     },
-    UpdateDexAggregator {
-        new_dex_aggregator: SecretContract,
-    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
