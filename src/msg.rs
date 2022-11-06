@@ -28,6 +28,11 @@ pub enum HandleMsg {
         amount: Uint128,
         msg: Option<Binary>,
     },
+    RescueTokens {
+        amount: Uint128,
+        denom: Option<String>,
+        token: Option<SecretContract>,
+    },
     SwapHalfOfSwbtcToButt {
         config: Config,
     },

@@ -6,8 +6,8 @@ use crate::msg::{Asset, AssetInfo, HandleMsg, InitMsg, QueryMsg, ReceiveMsg, Sec
 use crate::state::{Config, SecretContract};
 use crate::validations::authorize;
 use cosmwasm_std::{
-    from_binary, to_binary, Api, Binary, CosmosMsg, Env, Extern, HandleResponse, HumanAddr,
-    InitResponse, Querier, QueryResult, StdError, StdResult, Storage, Uint128, WasmMsg,
+    from_binary, to_binary, Api, BankMsg, Binary, Coin, CosmosMsg, Env, Extern, HandleResponse,
+    HumanAddr, InitResponse, Querier, QueryResult, StdError, StdResult, Storage, Uint128, WasmMsg,
 };
 use secret_toolkit::snip20;
 use secret_toolkit::storage::{TypedStore, TypedStoreMut};
@@ -71,6 +71,11 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             from, amount, msg, ..
         } => receive(deps, env, from, amount, msg),
         HandleMsg::RegisterTokens { tokens } => register_tokens(&env, tokens),
+        HandleMsg::RescueTokens {
+            amount,
+            denom,
+            token,
+        } => rescue_tokens(deps, &env, amount, denom, token),
         HandleMsg::SendLpToUser {
             config,
             user_address,
@@ -207,6 +212,47 @@ fn increase_allowance_for_pair_contract<S: Storage, A: Api, Q: Querier>(
         config.swbtc.contract_hash,
         config.swbtc.address,
     )?);
+
+    Ok(HandleResponse {
+        messages,
+        log: vec![],
+        data: None,
+    })
+}
+
+fn rescue_tokens<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: &Env,
+    amount: Uint128,
+    denom: Option<String>,
+    token: Option<SecretContract>,
+) -> StdResult<HandleResponse> {
+    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
+    authorize(vec![config.admin.clone()], &env.message.sender)?;
+
+    let mut messages: Vec<CosmosMsg> = vec![];
+    if let Some(denom_unwrapped) = denom {
+        let withdrawal_coin: Vec<Coin> = vec![Coin {
+            amount,
+            denom: denom_unwrapped,
+        }];
+        messages.push(CosmosMsg::Bank(BankMsg::Send {
+            from_address: env.contract.address.clone(),
+            to_address: config.admin.clone(),
+            amount: withdrawal_coin,
+        }));
+    }
+
+    if let Some(token_unwrapped) = token {
+        messages.push(snip20::transfer_msg(
+            config.admin,
+            amount,
+            None,
+            BLOCK_SIZE,
+            token_unwrapped.contract_hash,
+            token_unwrapped.address,
+        )?)
+    }
 
     Ok(HandleResponse {
         messages,
@@ -828,6 +874,70 @@ mod tests {
                 )
                 .unwrap(),
             ]
+        );
+    }
+
+    #[test]
+    fn test_rescue_tokens() {
+        let (_init_result, mut deps) = init_helper();
+        let denom: String = "uscrt".to_string();
+        let mut handle_msg = HandleMsg::RescueTokens {
+            amount: Uint128(MOCK_AMOUNT_TWO),
+            denom: Some(denom.clone()),
+            token: Some(mock_butt()),
+        };
+        // = when called by a non-admin
+        // = * it raises an Unauthorized error
+        let mut env: Env = mock_env(mock_user_address(), &[]);
+        let handle_result = handle(&mut deps, env, handle_msg.clone());
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::Unauthorized { backtrace: None }
+        );
+
+        // = when called by the admin
+        env = mock_env(MOCK_ADMIN, &[]);
+        // == when only denom is specified
+        handle_msg = HandleMsg::RescueTokens {
+            amount: Uint128(MOCK_AMOUNT_TWO),
+            denom: Some(denom.clone()),
+            token: None,
+        };
+        // === * it sends the amount specified of the coin of the denom to the admin
+        let handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
+        let handle_result_unwrapped = handle_result.unwrap();
+        assert_eq!(
+            handle_result_unwrapped.messages,
+            vec![CosmosMsg::Bank(BankMsg::Send {
+                from_address: env.contract.address,
+                to_address: HumanAddr(MOCK_ADMIN.to_string()),
+                amount: vec![Coin {
+                    denom: denom,
+                    amount: Uint128(MOCK_AMOUNT_TWO)
+                }],
+            })]
+        );
+
+        // == when only token is specified
+        handle_msg = HandleMsg::RescueTokens {
+            amount: Uint128(MOCK_AMOUNT),
+            denom: None,
+            token: Some(mock_butt()),
+        };
+        // == * it sends the amount specified of the token to the admin
+        let handle_result = handle(&mut deps, mock_env(MOCK_ADMIN, &[]), handle_msg.clone());
+        let handle_result_unwrapped = handle_result.unwrap();
+        assert_eq!(
+            handle_result_unwrapped.messages,
+            vec![snip20::transfer_msg(
+                HumanAddr::from(MOCK_ADMIN),
+                Uint128(MOCK_AMOUNT),
+                None,
+                BLOCK_SIZE,
+                mock_butt().contract_hash,
+                mock_butt().address,
+            )
+            .unwrap()]
         );
     }
 
