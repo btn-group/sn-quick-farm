@@ -4,6 +4,7 @@
   "type": "object",
   "required": [
     "butt",
+    "butt_swbtc_farm_pool",
     "butt_swbtc_lp",
     "butt_swbtc_trade_pair",
     "dex_aggregator",
@@ -12,6 +13,9 @@
   ],
   "properties": {
     "butt": {
+      "$ref": "#/definitions/SecretContract"
+    },
+    "butt_swbtc_farm_pool": {
       "$ref": "#/definitions/SecretContract"
     },
     "butt_swbtc_lp": {
