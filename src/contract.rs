@@ -268,13 +268,11 @@ fn rescue_tokens<S: Storage, A: Api, Q: Querier>(
 
 fn swap_half_of_swbtc_to_butt<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
-    env: &Env,
+    _env: &Env,
     from: HumanAddr,
     amount: Uint128,
     mut config: Config,
 ) -> StdResult<HandleResponse> {
-    // Test that the token is SWBTC
-    authorize([env.message.sender.clone()].to_vec(), &config.swbtc.address)?;
     // Test that it's sent from swap_to_swbtc_contract_address
     if config.swap_to_swbtc_contract_address.is_none() {
         return Err(StdError::generic_err("Swap to SWBTC contract missing."));
@@ -1060,39 +1058,68 @@ mod tests {
         );
     }
 
-    // #[test]
-    // fn test_swap_half_of_swbtc_to_butt() {
-    //     let (_init_result, mut deps) = init_helper();
-    //     let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
-    //     let handle_msg = HandleMsg::SwapHalfOfSwbtcToButt {};
+    #[test]
+    fn test_swap_half_of_swbtc_to_butt() {
+        let (_init_result, mut deps) = init_helper();
+        let swbtc_amount: Uint128 = Uint128(5);
 
-    //     // when called by non-contract
-    //     let mut env = mock_env(MOCK_ADMIN, &[]);
-    //     // = * it raises an unauthorized error
-    //     let mut handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
-    //     assert_eq!(
-    //         handle_result.unwrap_err(),
-    //         StdError::Unauthorized { backtrace: None }
-    //     );
-
-    //     // when called by contract
-    //     env = mock_env(env.contract.address, &[]);
-    //     // * it sends half the balance of swbtc to swap
-    //     handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
-    //     let handle_result_unwrapped = handle_result.unwrap();
-    //     // * it sends a message to register receive for the token
-    //     assert_eq!(
-    //         handle_result_unwrapped.messages,
-    //         vec![secret_toolkit::snip20::send_msg(
-    //             config.butt_swbtc_trade_pair.address,
-    //             Uint128(MOCK_AMOUNT / 2),
-    //             Some(Binary::from(r#"{ "swap": {} }"#.as_bytes())),
-    //             None,
-    //             BLOCK_SIZE,
-    //             config.swbtc.contract_hash,
-    //             config.swbtc.address,
-    //         )
-    //         .unwrap()]
-    //     );
-    // }
+        // = when called by SWBTC
+        let env: Env = mock_env(mock_swbtc().address, &[]);
+        // == when swap_to_swbtc_contract_address is missing
+        let mut config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
+        let handle_msg = HandleMsg::Receive {
+            sender: config.swbtc.address.clone(),
+            from: config.swbtc.address.clone(),
+            amount: swbtc_amount,
+            msg: None,
+        };
+        let handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
+        // == * it raises an error
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::generic_err("Swap to SWBTC contract missing.")
+        );
+        // == when swap_to_swbtc_contract_address is present
+        config.swap_to_swbtc_contract_address = Some(env.contract.address.clone());
+        // === when called from an address that is not the swap_to_swbtc_contract_address
+        TypedStoreMut::attach(&mut deps.storage)
+            .store(CONFIG_KEY, &config)
+            .unwrap();
+        // === * it raises an error
+        let mut handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::Unauthorized { backtrace: None }
+        );
+        // === when called from the address that is the swap_to_swbtc_contract_address
+        let handle_msg = HandleMsg::Receive {
+            sender: env.contract.address.clone(),
+            from: env.contract.address.clone(),
+            amount: swbtc_amount,
+            msg: None,
+        };
+        // === * it sends half the balance of swbtc to swap
+        handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
+        let handle_result_unwrapped = handle_result.unwrap();
+        let amount_to_swap = Uint128(swbtc_amount.u128() / 2);
+        assert_eq!(
+            handle_result_unwrapped.messages,
+            vec![secret_toolkit::snip20::send_msg(
+                config.butt_swbtc_trade_pair.address,
+                Uint128(swbtc_amount.u128() / 2),
+                Some(Binary::from(r#"{ "swap": {} }"#.as_bytes())),
+                None,
+                BLOCK_SIZE,
+                config.swbtc.contract_hash,
+                config.swbtc.address,
+            )
+            .unwrap()]
+        );
+        // === * it stores the other half in config as swbtc_amount_to_provide
+        config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
+        assert_eq!(
+            config.swbtc_amount_to_provide,
+            Some((swbtc_amount - amount_to_swap).unwrap())
+        );
+    }
 }
