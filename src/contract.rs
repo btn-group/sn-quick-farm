@@ -22,40 +22,25 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     let config: Config = Config {
         admin: env.message.sender,
         current_user: None,
-        dex_aggregator: msg.dex_aggregator,
         butt: msg.butt,
         swbtc: msg.swbtc,
         butt_swbtc_farm_pool: msg.butt_swbtc_farm_pool,
         butt_swbtc_trade_pair: msg.butt_swbtc_trade_pair,
         butt_swbtc_lp: msg.butt_swbtc_lp,
+        swap_to_swbtc_contract_address: None,
+        swbtc_amount_to_provide: None,
         viewing_key: msg.viewing_key,
     };
     config_store.store(CONFIG_KEY, &config)?;
 
     Ok(InitResponse {
-        messages: vec![
-            snip20::set_viewing_key_msg(
-                config.viewing_key.clone(),
-                None,
-                1,
-                config.butt.contract_hash,
-                config.butt.address,
-            )?,
-            snip20::set_viewing_key_msg(
-                config.viewing_key.clone(),
-                None,
-                1,
-                config.swbtc.contract_hash,
-                config.swbtc.address,
-            )?,
-            snip20::set_viewing_key_msg(
-                config.viewing_key.clone(),
-                None,
-                1,
-                config.butt_swbtc_lp.contract_hash,
-                config.butt_swbtc_lp.address,
-            )?,
-        ],
+        messages: vec![snip20::set_viewing_key_msg(
+            config.viewing_key.clone(),
+            None,
+            1,
+            config.butt_swbtc_lp.contract_hash,
+            config.butt_swbtc_lp.address,
+        )?],
         log: vec![],
     })
 }
@@ -81,7 +66,6 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
         HandleMsg::SendLpToUserThenDepositIntoFarmContract {} => {
             send_lp_to_user_then_deposit_into_farm_contract(deps, &env)
         }
-        HandleMsg::SwapHalfOfSwbtcToButt {} => swap_half_of_swbtc_to_butt(deps, &env),
     }
 }
 
@@ -104,61 +88,89 @@ fn receive<S: Storage, A: Api, Q: Querier>(
     amount: Uint128,
     msg: Option<Binary>,
 ) -> StdResult<HandleResponse> {
+    let config: Config = TypedStoreMut::attach(&mut deps.storage)
+        .load(CONFIG_KEY)
+        .unwrap();
     let response = if let Some(msg_unwrapped) = msg {
         let msg: ReceiveMsg = from_binary(&msg_unwrapped)?;
         match msg {
             ReceiveMsg::InitSwapAndProvide {
-                dex_aggregator_msg,
                 first_token_contract_hash,
+                swap_to_swbtc_contract,
+                swap_to_swbtc_msg,
             } => init_swap_and_provide(
                 deps,
                 &env,
                 from,
                 amount,
-                dex_aggregator_msg,
+                config,
                 first_token_contract_hash,
+                swap_to_swbtc_contract,
+                swap_to_swbtc_msg,
             ),
         }
+    } else if env.message.sender == config.swbtc.address {
+        swap_half_of_swbtc_to_butt(deps, &env, from, amount, config)
+    } else if env.message.sender == config.butt.address {
+        provide_liquidity_to_trade_pair(deps, &env, from, amount, config)
     } else {
-        provide_liquidity_to_trade_pair(deps, &env, from, amount)
+        return Err(StdError::generic_err(
+            "Receive message combination is wrong.",
+        ));
     };
     pad_response(response)
 }
 
+// No matter what first swap has to return in a swap to swbtc
 fn init_swap_and_provide<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: &Env,
     from: HumanAddr,
     amount: Uint128,
-    dex_aggregator_msg: Option<Binary>,
+    mut config: Config,
     first_token_contract_hash: String,
+    swap_to_swbtc_contract: Option<SecretContract>,
+    swap_to_swbtc_msg: Option<Binary>,
 ) -> StdResult<HandleResponse> {
     // 1. Make sure token isn't BUTT
-    let mut config_store = TypedStoreMut::attach(&mut deps.storage);
-    let mut config: Config = config_store.load(CONFIG_KEY).unwrap();
     if config.butt.address == env.message.sender {
-        return Err(StdError::generic_err("First token can't be BUTT."));
+        return Err(StdError::generic_err(
+            "Token can't be BUTT when ReceiveMsg present.",
+        ));
     };
+    // 2. Make sure contract isn't being used already
     if config.current_user.is_some() {
         return Err(StdError::generic_err("Contract is already being used."));
-    } else {
-        config.current_user = Some(from);
-        config_store.store(CONFIG_KEY, &config)?;
     }
 
     let mut messages: Vec<CosmosMsg> = vec![];
-    // 2. Swap to DEX aggregator if first token is not butt
-    if config.swbtc.address != env.message.sender {
-        if dex_aggregator_msg.is_none() {
-            return Err(StdError::generic_err(
-                "DEX aggregator msg must be present when first token is not SWBTC.",
-            ));
+    // 3. Swap token to SWBTC if first token is not SWBTC
+    // Or send the SWBTC to the contract again which would simulate the result of a swap to swbtc
+    if config.swbtc.address == env.message.sender {
+        config.swap_to_swbtc_contract_address = Some(env.contract.address.clone());
+        messages.push(snip20::send_msg(
+            env.contract.address.clone(),
+            amount,
+            None,
+            None,
+            BLOCK_SIZE,
+            config.swbtc.contract_hash.clone(),
+            config.swbtc.address.clone(),
+        )?);
+    } else {
+        if swap_to_swbtc_msg.is_none() {
+            return Err(StdError::generic_err("Swap to SWBTC msg missing."));
+        }
+        if swap_to_swbtc_contract.is_none() {
+            return Err(StdError::generic_err("Swap to SWBTC contract missing."));
         }
 
+        config.swap_to_swbtc_contract_address =
+            Some(swap_to_swbtc_contract.clone().unwrap().address);
         messages.push(snip20::send_msg(
-            config.dex_aggregator.address,
+            swap_to_swbtc_contract.unwrap().address,
             amount,
-            dex_aggregator_msg,
+            swap_to_swbtc_msg,
             None,
             BLOCK_SIZE,
             first_token_contract_hash,
@@ -166,22 +178,17 @@ fn init_swap_and_provide<S: Storage, A: Api, Q: Querier>(
         )?);
     }
 
-    // 3. Call function to swap half balance of SWBTC to BUTT
-    // 4. Receive function to provide liquidity to trade pair
-    messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: env.contract.address.clone(),
-        callback_code_hash: env.contract_code_hash.clone(),
-        msg: to_binary(&HandleMsg::SwapHalfOfSwbtcToButt {})?,
-        send: vec![],
-    }));
-
-    // 5. Call function to read balance of LP and send to user
+    // 5. Call function to send lp to user then deposit into farm contract
     messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: env.contract.address.clone(),
         callback_code_hash: env.contract_code_hash.clone(),
         msg: to_binary(&HandleMsg::SendLpToUserThenDepositIntoFarmContract {})?,
         send: vec![],
     }));
+
+    // 6. Store Config
+    config.current_user = Some(from);
+    TypedStoreMut::attach(&mut deps.storage).store(CONFIG_KEY, &config)?;
 
     Ok(HandleResponse {
         messages,
@@ -265,32 +272,35 @@ fn rescue_tokens<S: Storage, A: Api, Q: Querier>(
 fn swap_half_of_swbtc_to_butt<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: &Env,
+    from: HumanAddr,
+    amount: Uint128,
+    mut config: Config,
 ) -> StdResult<HandleResponse> {
-    authorize([env.message.sender.clone()].to_vec(), &env.contract.address)?;
-    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
+    // Test that the token is SWBTC
+    authorize([env.message.sender.clone()].to_vec(), &config.swbtc.address)?;
+    // Test that it's sent from swap_to_swbtc_contract_address
+    if config.swap_to_swbtc_contract_address.is_none() {
+        return Err(StdError::generic_err("Swap to SWBTC contract missing."));
+    }
+    authorize(
+        [from].to_vec(),
+        &config.swap_to_swbtc_contract_address.clone().unwrap(),
+    )?;
 
-    let mut messages: Vec<CosmosMsg> = vec![];
-    // Query the contract's SWBTC balance
-    let swbtc_balance_of_contract: Uint128 = query_balance_of_token(
-        deps,
-        env.contract.address.clone(),
-        config.swbtc.clone(),
-        config.viewing_key,
-    )
-    .unwrap();
-    // Swap half to BUTT
-    messages.push(secret_toolkit::snip20::send_msg(
-        config.butt_swbtc_trade_pair.address,
-        Uint128(swbtc_balance_of_contract.u128() / 2),
-        Some(Binary::from(r#"{ "swap": {} }"#.as_bytes())),
-        None,
-        BLOCK_SIZE,
-        config.swbtc.contract_hash,
-        config.swbtc.address,
-    )?);
+    let swbtc_amount_to_swap: Uint128 = Uint128(amount.u128() / 2);
+    config.swbtc_amount_to_provide = Some((amount - swbtc_amount_to_swap)?);
+    TypedStoreMut::attach(&mut deps.storage).store(CONFIG_KEY, &config)?;
 
     Ok(HandleResponse {
-        messages,
+        messages: vec![secret_toolkit::snip20::send_msg(
+            config.butt_swbtc_trade_pair.address,
+            swbtc_amount_to_swap,
+            Some(Binary::from(r#"{ "swap": {} }"#.as_bytes())),
+            None,
+            BLOCK_SIZE,
+            config.swbtc.contract_hash,
+            config.swbtc.address,
+        )?],
         log: vec![],
         data: None,
     })
@@ -307,35 +317,32 @@ fn pad_response(response: StdResult<HandleResponse>) -> StdResult<HandleResponse
 }
 
 fn provide_liquidity_to_trade_pair<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
+    _deps: &mut Extern<S, A, Q>,
     env: &Env,
     from: HumanAddr,
     amount: Uint128,
+    config: Config,
 ) -> StdResult<HandleResponse> {
-    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
     // Test that the token is BUTT
     authorize([env.message.sender.clone()].to_vec(), &config.butt.address)?;
     // Test that the sender is from the trade pair
     authorize([from].to_vec(), &config.butt_swbtc_trade_pair.address)?;
 
-    let butt_balance_of_contract: Uint128 = amount;
-    if butt_balance_of_contract.is_zero() {
+    let butt_amount_to_provide: Uint128 = amount;
+    if butt_amount_to_provide.is_zero() {
         return Err(StdError::generic_err(
             "Contract BUTT balance must be greater than zero.",
         ));
     }
 
-    // Query the contract's SWBTC balance
-    let swbtc_balance_of_contract: Uint128 = query_balance_of_token(
-        deps,
-        env.contract.address.clone(),
-        config.swbtc.clone(),
-        config.viewing_key.clone(),
-    )
-    .unwrap();
-    if swbtc_balance_of_contract.is_zero() {
+    if config.swbtc_amount_to_provide.is_none() {
+        return Err(StdError::generic_err("swbtc_amount_to_provide is missing."));
+    }
+
+    let swbtc_amount_to_provide: Uint128 = config.swbtc_amount_to_provide.unwrap();
+    if swbtc_amount_to_provide.is_zero() {
         return Err(StdError::generic_err(
-            "Contract SWBTC balance must be greater than zero.",
+            "SWBTC amount to provide must be greater than zero.",
         ));
     }
 
@@ -343,7 +350,7 @@ fn provide_liquidity_to_trade_pair<S: Storage, A: Api, Q: Querier>(
     let provide_liquidity_msg = SecretSwapHandleMsg::ProvideLiquidity {
         assets: [
             Asset {
-                amount: swbtc_balance_of_contract,
+                amount: swbtc_amount_to_provide,
                 info: AssetInfo::Token {
                     contract_addr: config.swbtc.address,
                     token_code_hash: config.swbtc.contract_hash,
@@ -351,7 +358,7 @@ fn provide_liquidity_to_trade_pair<S: Storage, A: Api, Q: Querier>(
                 },
             },
             Asset {
-                amount: butt_balance_of_contract,
+                amount: butt_amount_to_provide,
                 info: AssetInfo::Token {
                     contract_addr: config.butt.address,
                     token_code_hash: config.butt.contract_hash,
@@ -380,14 +387,7 @@ fn query_balance_of_token<S: Storage, A: Api, Q: Querier>(
     token: SecretContract,
     viewing_key: String,
 ) -> StdResult<Uint128> {
-    if token.address == HumanAddr::from(MOCK_BUTT_ADDRESS) {
-        Ok(Uint128(MOCK_AMOUNT))
-    } else if vec![
-        HumanAddr::from(MOCK_SWBTC_ADDRESS),
-        HumanAddr::from(MOCK_BUTT_SWBTC_LP_ADDRESS),
-    ]
-    .contains(&token.address)
-    {
+    if token.address == HumanAddr::from(MOCK_BUTT_SWBTC_LP_ADDRESS) {
         Ok(Uint128(MOCK_AMOUNT_TWO))
     } else {
         let balance = snip20::balance_query(
@@ -447,6 +447,8 @@ fn send_lp_to_user_then_deposit_into_farm_contract<S: Storage, A: Api, Q: Querie
         }
 
         config.current_user = None;
+        config.swap_to_swbtc_contract_address = None;
+        config.swbtc_amount_to_provide = None;
         TypedStoreMut::attach(&mut deps.storage).store(CONFIG_KEY, &config)?;
         let mut messages: Vec<CosmosMsg> = vec![];
         messages.push(snip20::transfer_msg(
@@ -500,8 +502,8 @@ mod tests {
     use crate::state::{ConfigPublic, SecretContract};
     use cosmwasm_std::testing::{mock_dependencies, mock_env, MockApi, MockQuerier, MockStorage};
     pub const MOCK_ADMIN: &str = "admin";
-    pub const MOCK_DEX_AGGREGATOR_ADDRESS: &str = "mock-dex-aggregator-address";
     pub const MOCK_BUTT_SWBTC_TRADE_PAIR_CONTRACT_ADDRESS: &str = "mock-swbtc-address";
+    pub const MOCK_SWAP_TO_SWBTC_ADDRESS: &str = "mock-swap-to-swbtc-address";
     pub const MOCK_VIEWING_KEY: &str = "DELIGHTFUL";
 
     // === HELPERS ===
@@ -513,7 +515,6 @@ mod tests {
         let mut deps = mock_dependencies(20, &[]);
         let msg = InitMsg {
             butt: mock_butt(),
-            dex_aggregator: mock_dex_aggregator(),
             swbtc: mock_swbtc(),
             butt_swbtc_farm_pool: mock_butt_swbtc_farm_pool(),
             butt_swbtc_trade_pair: mock_butt_swbtc_trade_pair(),
@@ -552,16 +553,16 @@ mod tests {
         }
     }
 
-    fn mock_dex_aggregator() -> SecretContract {
-        SecretContract {
-            address: HumanAddr::from(MOCK_DEX_AGGREGATOR_ADDRESS),
-            contract_hash: "mock-dex-aggregator-contract-hash".to_string(),
-        }
-    }
-
     fn mock_swbtc() -> SecretContract {
         SecretContract {
             address: HumanAddr::from(MOCK_SWBTC_ADDRESS),
+            contract_hash: "mock-swbtc-contract-hash".to_string(),
+        }
+    }
+
+    fn mock_swap_to_swbtc_contract() -> SecretContract {
+        SecretContract {
+            address: HumanAddr::from(MOCK_SWAP_TO_SWBTC_ADDRESS),
             contract_hash: "mock-swbtc-contract-hash".to_string(),
         }
     }
@@ -582,12 +583,13 @@ mod tests {
             Config {
                 admin: HumanAddr::from(MOCK_ADMIN),
                 current_user: None,
-                dex_aggregator: mock_dex_aggregator(),
                 butt: mock_butt(),
                 swbtc: mock_swbtc(),
                 butt_swbtc_farm_pool: mock_butt_swbtc_farm_pool(),
                 butt_swbtc_trade_pair: mock_butt_swbtc_trade_pair(),
                 butt_swbtc_lp: mock_butt_swbtc_lp(),
+                swap_to_swbtc_contract_address: None,
+                swbtc_amount_to_provide: None,
                 viewing_key: MOCK_VIEWING_KEY.to_string(),
             }
         );
@@ -595,32 +597,14 @@ mod tests {
         // * it sets the viewing key for BUTT, SWBTC & BUTT-SWBTC LP
         assert_eq!(
             init_result.unwrap().messages,
-            vec![
-                snip20::set_viewing_key_msg(
-                    MOCK_VIEWING_KEY.to_string(),
-                    None,
-                    1,
-                    mock_butt().contract_hash,
-                    mock_butt().address,
-                )
-                .unwrap(),
-                snip20::set_viewing_key_msg(
-                    MOCK_VIEWING_KEY.to_string(),
-                    None,
-                    1,
-                    mock_swbtc().contract_hash,
-                    mock_swbtc().address,
-                )
-                .unwrap(),
-                snip20::set_viewing_key_msg(
-                    MOCK_VIEWING_KEY.to_string(),
-                    None,
-                    1,
-                    mock_butt_swbtc_lp().contract_hash,
-                    mock_butt_swbtc_lp().address,
-                )
-                .unwrap(),
-            ]
+            vec![snip20::set_viewing_key_msg(
+                MOCK_VIEWING_KEY.to_string(),
+                None,
+                1,
+                mock_butt_swbtc_lp().contract_hash,
+                mock_butt_swbtc_lp().address,
+            )
+            .unwrap(),]
         );
     }
 
@@ -677,9 +661,10 @@ mod tests {
         let (_init_result, mut deps) = init_helper();
         let amount: Uint128 = Uint128(2);
         let mut config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
-        let mut dex_aggregator_msg: Option<Binary> = Some(to_binary(&123).unwrap());
+        let mut swap_to_swbtc_msg: Option<Binary> = Some(to_binary(&123).unwrap());
         let mut receive_msg = ReceiveMsg::InitSwapAndProvide {
-            dex_aggregator_msg: dex_aggregator_msg.clone(),
+            swap_to_swbtc_contract: Some(mock_swap_to_swbtc_contract()),
+            swap_to_swbtc_msg: swap_to_swbtc_msg.clone(),
             first_token_contract_hash: mock_butt().contract_hash,
         };
         // when token sent in is butt
@@ -706,20 +691,12 @@ mod tests {
         let mut handle_result_unwrapped = handle_result.unwrap();
         assert_eq!(
             handle_result_unwrapped.messages,
-            vec![
-                CosmosMsg::Wasm(WasmMsg::Execute {
-                    contract_addr: env.contract.address.clone(),
-                    callback_code_hash: env.contract_code_hash.clone(),
-                    msg: to_binary(&HandleMsg::SwapHalfOfSwbtcToButt {}).unwrap(),
-                    send: vec![],
-                }),
-                CosmosMsg::Wasm(WasmMsg::Execute {
-                    contract_addr: env.contract.address.clone(),
-                    callback_code_hash: env.contract_code_hash.clone(),
-                    msg: to_binary(&HandleMsg::SendLpToUserThenDepositIntoFarmContract {}).unwrap(),
-                    send: vec![],
-                })
-            ]
+            vec![CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: env.contract.address.clone(),
+                callback_code_hash: env.contract_code_hash.clone(),
+                msg: to_binary(&HandleMsg::SendLpToUserThenDepositIntoFarmContract {}).unwrap(),
+                send: vec![],
+            })]
         );
 
         // when token sent in is not swbtc or butt
@@ -729,7 +706,7 @@ mod tests {
         TypedStoreMut::attach(&mut deps.storage)
             .store(CONFIG_KEY, &config)
             .unwrap();
-        // = when dex_aggregator_msg is present
+        // = when swap_to_swbtc_msg is present
         // = * it calls the function to swap to DEX aggregator
         // = * it calls the functions to swap half of SWBTC to BUTT
         // = * it calls the function to provide liquidity to trade pair
@@ -740,9 +717,9 @@ mod tests {
             handle_result_unwrapped.messages,
             vec![
                 snip20::send_msg(
-                    config.dex_aggregator.address.clone(),
+                    mock_swap_to_swbtc_contract().address.clone(),
                     amount,
-                    dex_aggregator_msg,
+                    swap_to_swbtc_msg,
                     None,
                     BLOCK_SIZE,
                     mock_butt().contract_hash,
@@ -752,27 +729,22 @@ mod tests {
                 CosmosMsg::Wasm(WasmMsg::Execute {
                     contract_addr: env.contract.address.clone(),
                     callback_code_hash: env.contract_code_hash.clone(),
-                    msg: to_binary(&HandleMsg::SwapHalfOfSwbtcToButt {}).unwrap(),
-                    send: vec![],
-                }),
-                CosmosMsg::Wasm(WasmMsg::Execute {
-                    contract_addr: env.contract.address.clone(),
-                    callback_code_hash: env.contract_code_hash.clone(),
                     msg: to_binary(&HandleMsg::SendLpToUserThenDepositIntoFarmContract {}).unwrap(),
                     send: vec![],
                 })
             ]
         );
 
-        // = when dex_aggregator_msg is missing
+        // = when swap_to_swbtc_msg is missing
         // NEED TO RESET config.current_user set from previous test
         config.current_user = None;
         TypedStoreMut::attach(&mut deps.storage)
             .store(CONFIG_KEY, &config)
             .unwrap();
-        dex_aggregator_msg = None;
+        swap_to_swbtc_msg = None;
         receive_msg = ReceiveMsg::InitSwapAndProvide {
-            dex_aggregator_msg,
+            swap_to_swbtc_contract: Some(mock_swap_to_swbtc_contract()),
+            swap_to_swbtc_msg,
             first_token_contract_hash: mock_butt_swbtc_lp().contract_hash,
         };
         handle_msg = HandleMsg::Receive {
@@ -786,9 +758,7 @@ mod tests {
         // * it raises an error
         assert_eq!(
             handle_result.unwrap_err(),
-            StdError::generic_err(
-                "DEX aggregator msg must be present when first token is not SWBTC."
-            )
+            StdError::generic_err("Swap to SWBTC msg missing.")
         );
     }
 
@@ -1039,39 +1009,39 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_swap_half_of_swbtc_to_butt() {
-        let (_init_result, mut deps) = init_helper();
-        let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
-        let handle_msg = HandleMsg::SwapHalfOfSwbtcToButt {};
+    // #[test]
+    // fn test_swap_half_of_swbtc_to_butt() {
+    //     let (_init_result, mut deps) = init_helper();
+    //     let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
+    //     let handle_msg = HandleMsg::SwapHalfOfSwbtcToButt {};
 
-        // when called by non-contract
-        let mut env = mock_env(MOCK_ADMIN, &[]);
-        // = * it raises an unauthorized error
-        let mut handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
-        assert_eq!(
-            handle_result.unwrap_err(),
-            StdError::Unauthorized { backtrace: None }
-        );
+    //     // when called by non-contract
+    //     let mut env = mock_env(MOCK_ADMIN, &[]);
+    //     // = * it raises an unauthorized error
+    //     let mut handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
+    //     assert_eq!(
+    //         handle_result.unwrap_err(),
+    //         StdError::Unauthorized { backtrace: None }
+    //     );
 
-        // when called by contract
-        env = mock_env(env.contract.address, &[]);
-        // * it sends half the balance of swbtc to swap
-        handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
-        let handle_result_unwrapped = handle_result.unwrap();
-        // * it sends a message to register receive for the token
-        assert_eq!(
-            handle_result_unwrapped.messages,
-            vec![secret_toolkit::snip20::send_msg(
-                config.butt_swbtc_trade_pair.address,
-                Uint128(MOCK_AMOUNT_TWO / 2),
-                Some(Binary::from(r#"{ "swap": {} }"#.as_bytes())),
-                None,
-                BLOCK_SIZE,
-                config.swbtc.contract_hash,
-                config.swbtc.address,
-            )
-            .unwrap()]
-        );
-    }
+    //     // when called by contract
+    //     env = mock_env(env.contract.address, &[]);
+    //     // * it sends half the balance of swbtc to swap
+    //     handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
+    //     let handle_result_unwrapped = handle_result.unwrap();
+    //     // * it sends a message to register receive for the token
+    //     assert_eq!(
+    //         handle_result_unwrapped.messages,
+    //         vec![secret_toolkit::snip20::send_msg(
+    //             config.butt_swbtc_trade_pair.address,
+    //             Uint128(MOCK_AMOUNT_TWO / 2),
+    //             Some(Binary::from(r#"{ "swap": {} }"#.as_bytes())),
+    //             None,
+    //             BLOCK_SIZE,
+    //             config.swbtc.contract_hash,
+    //             config.swbtc.address,
+    //         )
+    //         .unwrap()]
+    //     );
+    // }
 }
