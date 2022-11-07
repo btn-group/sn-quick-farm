@@ -8,7 +8,6 @@
     "butt_swbtc_farm_pool",
     "butt_swbtc_lp",
     "butt_swbtc_trade_pair",
-    "dex_aggregator",
     "swbtc",
     "viewing_key"
   ],
@@ -38,11 +37,28 @@
         }
       ]
     },
-    "dex_aggregator": {
-      "$ref": "#/definitions/SecretContract"
+    "swap_to_swbtc_contract_address": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/HumanAddr"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "swbtc": {
       "$ref": "#/definitions/SecretContract"
+    },
+    "swbtc_amount_to_provide": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Uint128"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "viewing_key": {
       "type": "string"
@@ -66,6 +82,9 @@
           "type": "string"
         }
       }
+    },
+    "Uint128": {
+      "type": "string"
     }
   }
 }

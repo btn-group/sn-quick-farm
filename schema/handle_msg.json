@@ -110,17 +110,6 @@
     {
       "type": "object",
       "required": [
-        "swap_half_of_swbtc_to_butt"
-      ],
-      "properties": {
-        "swap_half_of_swbtc_to_butt": {
-          "type": "object"
-        }
-      }
-    },
-    {
-      "type": "object",
-      "required": [
         "send_lp_to_user_then_deposit_into_farm_contract"
       ],
       "properties": {
