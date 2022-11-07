@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InitMsg {
-    pub dex_aggregator: SecretContract,
     pub butt: SecretContract,
     pub swbtc: SecretContract,
     pub butt_swbtc_farm_pool: SecretContract,
@@ -34,7 +33,6 @@ pub enum HandleMsg {
         denom: Option<String>,
         token: Option<SecretContract>,
     },
-    SwapHalfOfSwbtcToButt {},
     SendLpToUserThenDepositIntoFarmContract {},
 }
 
@@ -49,7 +47,8 @@ pub enum QueryMsg {
 pub enum ReceiveMsg {
     InitSwapAndProvide {
         first_token_contract_hash: String,
-        dex_aggregator_msg: Option<Binary>,
+        swap_to_swbtc_contract: Option<SecretContract>,
+        swap_to_swbtc_msg: Option<Binary>,
     },
 }
 
