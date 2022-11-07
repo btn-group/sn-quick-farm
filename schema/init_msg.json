@@ -7,7 +7,6 @@
     "butt_swbtc_farm_pool",
     "butt_swbtc_lp",
     "butt_swbtc_trade_pair",
-    "dex_aggregator",
     "swbtc",
     "viewing_key"
   ],
@@ -22,9 +21,6 @@
       "$ref": "#/definitions/SecretContract"
     },
     "butt_swbtc_trade_pair": {
-      "$ref": "#/definitions/SecretContract"
-    },
-    "dex_aggregator": {
       "$ref": "#/definitions/SecretContract"
     },
     "swbtc": {
