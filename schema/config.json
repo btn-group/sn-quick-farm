@@ -18,6 +18,16 @@
     "butt": {
       "$ref": "#/definitions/SecretContract"
     },
+    "butt_amount_to_provide": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Uint128"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "butt_swbtc_farm_pool": {
       "$ref": "#/definitions/SecretContract"
     },

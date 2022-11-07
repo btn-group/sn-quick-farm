@@ -12,6 +12,7 @@ pub struct Config {
     pub butt_swbtc_trade_pair: SecretContract,
     pub butt_swbtc_lp: SecretContract,
     pub swap_to_swbtc_contract_address: Option<HumanAddr>,
+    pub butt_amount_to_provide: Option<Uint128>,
     pub swbtc_amount_to_provide: Option<Uint128>,
     pub viewing_key: String,
 }

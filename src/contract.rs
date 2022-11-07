@@ -3,8 +3,9 @@ use crate::msg::{Asset, AssetInfo, HandleMsg, InitMsg, QueryMsg, ReceiveMsg, Sec
 use crate::state::{Config, SecretContract};
 use crate::validations::authorize;
 use cosmwasm_std::{
-    from_binary, to_binary, Api, BankMsg, Binary, Coin, CosmosMsg, Env, Extern, HandleResponse,
-    HumanAddr, InitResponse, Querier, QueryResult, StdError, StdResult, Storage, Uint128, WasmMsg,
+    from_binary, log, to_binary, Api, BankMsg, Binary, Coin, CosmosMsg, Env, Extern,
+    HandleResponse, HumanAddr, InitResponse, Querier, QueryResult, StdError, StdResult, Storage,
+    Uint128, WasmMsg,
 };
 use secret_toolkit::snip20;
 use secret_toolkit::storage::{TypedStore, TypedStoreMut};
@@ -25,6 +26,7 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
         butt_swbtc_trade_pair: msg.butt_swbtc_trade_pair,
         butt_swbtc_lp: msg.butt_swbtc_lp,
         swap_to_swbtc_contract_address: None,
+        butt_amount_to_provide: None,
         swbtc_amount_to_provide: None,
         viewing_key: msg.viewing_key,
     };
@@ -312,11 +314,11 @@ fn pad_response(response: StdResult<HandleResponse>) -> StdResult<HandleResponse
 }
 
 fn provide_liquidity_to_trade_pair<S: Storage, A: Api, Q: Querier>(
-    _deps: &mut Extern<S, A, Q>,
+    deps: &mut Extern<S, A, Q>,
     _env: &Env,
     from: HumanAddr,
     amount: Uint128,
-    config: Config,
+    mut config: Config,
 ) -> StdResult<HandleResponse> {
     // Test that the sender is from the trade pair
     authorize([from].to_vec(), &config.butt_swbtc_trade_pair.address)?;
@@ -339,6 +341,8 @@ fn provide_liquidity_to_trade_pair<S: Storage, A: Api, Q: Querier>(
         ));
     }
 
+    config.butt_amount_to_provide = Some(amount);
+    TypedStoreMut::attach(&mut deps.storage).store(CONFIG_KEY, &config)?;
     // Provide liquidity to farm contract
     let provide_liquidity_msg = SecretSwapHandleMsg::ProvideLiquidity {
         assets: [
@@ -439,8 +443,11 @@ fn send_lp_to_user_then_deposit_into_farm_contract<S: Storage, A: Api, Q: Querie
             ));
         }
 
+        let butt_amount_to_provide: Uint128 = config.butt_amount_to_provide.unwrap();
+        let swbtc_amount_to_provide: Uint128 = config.swbtc_amount_to_provide.unwrap();
         config.current_user = None;
         config.swap_to_swbtc_contract_address = None;
+        config.butt_amount_to_provide = None;
         config.swbtc_amount_to_provide = None;
         TypedStoreMut::attach(&mut deps.storage).store(CONFIG_KEY, &config)?;
 
@@ -467,7 +474,11 @@ fn send_lp_to_user_then_deposit_into_farm_contract<S: Storage, A: Api, Q: Querie
                     config.butt_swbtc_lp.address,
                 )?,
             ],
-            log: vec![],
+            log: vec![
+                log("swbtc_amount", swbtc_amount_to_provide.to_string()),
+                log("butt_amount", butt_amount_to_provide.to_string()),
+                log("lp_amount", lp_balance_of_contract.to_string()),
+            ],
             data: None,
         }))
     } else {
@@ -584,6 +595,7 @@ mod tests {
                 butt_swbtc_trade_pair: mock_butt_swbtc_trade_pair(),
                 butt_swbtc_lp: mock_butt_swbtc_lp(),
                 swap_to_swbtc_contract_address: None,
+                butt_amount_to_provide: None,
                 swbtc_amount_to_provide: None,
                 viewing_key: MOCK_VIEWING_KEY.to_string(),
             }
@@ -1034,6 +1046,8 @@ mod tests {
 
         // = when config current_user is present
         config.current_user = Some(mock_user_address());
+        config.butt_amount_to_provide = Some(Uint128(1));
+        config.swbtc_amount_to_provide = Some(Uint128(1));
         TypedStoreMut::attach(&mut deps.storage)
             .store(CONFIG_KEY, &config)
             .unwrap();
@@ -1074,6 +1088,14 @@ mod tests {
                     config.butt_swbtc_lp.address,
                 )
                 .unwrap()
+            ]
+        );
+        assert_eq!(
+            handle_result_unwrapped.log,
+            vec![
+                log("swbtc_amount", Uint128(1).to_string()),
+                log("butt_amount", Uint128(1).to_string()),
+                log("lp_amount", Uint128(MOCK_AMOUNT).to_string()),
             ]
         );
     }
