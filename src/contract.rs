@@ -34,7 +34,7 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
         messages: vec![snip20::set_viewing_key_msg(
             config.viewing_key.clone(),
             None,
-            1,
+            BLOCK_SIZE,
             config.butt_swbtc_lp.contract_hash,
             config.butt_swbtc_lp.address,
         )?],
@@ -444,7 +444,7 @@ fn send_lp_to_user_then_deposit_into_farm_contract<S: Storage, A: Api, Q: Querie
         config.swbtc_amount_to_provide = None;
         TypedStoreMut::attach(&mut deps.storage).store(CONFIG_KEY, &config)?;
 
-        Ok(HandleResponse {
+        pad_response(Ok(HandleResponse {
             messages: vec![
                 snip20::transfer_msg(
                     current_user_unwrapped.clone(),
@@ -469,7 +469,7 @@ fn send_lp_to_user_then_deposit_into_farm_contract<S: Storage, A: Api, Q: Querie
             ],
             log: vec![],
             data: None,
-        })
+        }))
     } else {
         Err(StdError::generic_err("Contract wasn't called properly."))
     }
@@ -595,7 +595,7 @@ mod tests {
             vec![snip20::set_viewing_key_msg(
                 MOCK_VIEWING_KEY.to_string(),
                 None,
-                1,
+                BLOCK_SIZE,
                 mock_butt_swbtc_lp().contract_hash,
                 mock_butt_swbtc_lp().address,
             )
@@ -889,6 +889,26 @@ mod tests {
     }
 
     #[test]
+    fn test_receive() {
+        let (_init_result, mut deps) = init_helper();
+
+        // when sent and not BUTT or SWBTC and without a ReceiveMsg
+        let env = mock_env(mock_butt_swbtc_lp().address, &[]);
+        let handle_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: Uint128(5),
+            msg: None,
+        };
+        let handle_result = handle(&mut deps, env, handle_msg);
+        // == * it raises an error
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::generic_err("Receive message combination is wrong.")
+        );
+    }
+
+    #[test]
     fn test_register_tokens() {
         let (_init_result, mut deps) = init_helper();
         let env = mock_env(mock_user_address(), &[]);
@@ -1025,7 +1045,7 @@ mod tests {
         //     StdError::generic_err("Result BUTT-SWBTC LP must be greater than zero.",)
         // );
         // == when contract's balance of butt-swbtc-lp is greater than zero
-        // == * it sends the balance of the toke to the user
+        // == * it sends the balance of the token to the user
         handle_result = handle(&mut deps, env.clone(), handle_msg.clone());
         let handle_result_unwrapped = handle_result.unwrap();
         // * it sends a message to register receive for the token
