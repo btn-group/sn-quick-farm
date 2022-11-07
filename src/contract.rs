@@ -1,6 +1,6 @@
 use crate::constants::{
-    BLOCK_SIZE, CONFIG_KEY, MOCK_AMOUNT, MOCK_AMOUNT_TWO, MOCK_BUTT_ADDRESS,
-    MOCK_BUTT_SWBTC_LP_ADDRESS, MOCK_SWBTC_ADDRESS,
+    BLOCK_SIZE, CONFIG_KEY, MOCK_AMOUNT, MOCK_BUTT_ADDRESS, MOCK_BUTT_SWBTC_LP_ADDRESS,
+    MOCK_SWBTC_ADDRESS,
 };
 use crate::msg::{Asset, AssetInfo, HandleMsg, InitMsg, QueryMsg, ReceiveMsg, SecretSwapHandleMsg};
 use crate::state::{Config, SecretContract};
@@ -388,7 +388,7 @@ fn query_balance_of_token<S: Storage, A: Api, Q: Querier>(
     viewing_key: String,
 ) -> StdResult<Uint128> {
     if token.address == HumanAddr::from(MOCK_BUTT_SWBTC_LP_ADDRESS) {
-        Ok(Uint128(MOCK_AMOUNT_TWO))
+        Ok(Uint128(MOCK_AMOUNT))
     } else {
         let balance = snip20::balance_query(
             &deps.querier,
@@ -811,7 +811,7 @@ mod tests {
         let provide_liquidity_msg = SecretSwapHandleMsg::ProvideLiquidity {
             assets: [
                 Asset {
-                    amount: Uint128(MOCK_AMOUNT_TWO),
+                    amount: Uint128(MOCK_AMOUNT),
                     info: AssetInfo::Token {
                         contract_addr: config.swbtc.address,
                         token_code_hash: config.swbtc.contract_hash,
@@ -879,7 +879,7 @@ mod tests {
         let (_init_result, mut deps) = init_helper();
         let denom: String = "uscrt".to_string();
         let mut handle_msg = HandleMsg::RescueTokens {
-            amount: Uint128(MOCK_AMOUNT_TWO),
+            amount: Uint128(MOCK_AMOUNT),
             denom: Some(denom.clone()),
             token: Some(mock_butt()),
         };
@@ -896,7 +896,7 @@ mod tests {
         env = mock_env(MOCK_ADMIN, &[]);
         // == when only denom is specified
         handle_msg = HandleMsg::RescueTokens {
-            amount: Uint128(MOCK_AMOUNT_TWO),
+            amount: Uint128(MOCK_AMOUNT),
             denom: Some(denom.clone()),
             token: None,
         };
@@ -910,7 +910,7 @@ mod tests {
                 to_address: HumanAddr(MOCK_ADMIN.to_string()),
                 amount: vec![Coin {
                     denom: denom,
-                    amount: Uint128(MOCK_AMOUNT_TWO)
+                    amount: Uint128(MOCK_AMOUNT)
                 }],
             })]
         );
@@ -985,7 +985,7 @@ mod tests {
             vec![
                 snip20::transfer_msg(
                     mock_user_address(),
-                    Uint128(MOCK_AMOUNT_TWO),
+                    Uint128(MOCK_AMOUNT),
                     None,
                     BLOCK_SIZE,
                     config.butt_swbtc_lp.contract_hash.clone(),
@@ -995,7 +995,7 @@ mod tests {
                 snip20::send_from_msg(
                     mock_user_address(),
                     config.butt_swbtc_farm_pool.address,
-                    Uint128(MOCK_AMOUNT_TWO),
+                    Uint128(MOCK_AMOUNT),
                     Some(Binary::from(
                         r#"{ "deposit_incentivized_token": {} }"#.as_bytes(),
                     )),
@@ -1034,7 +1034,7 @@ mod tests {
     //         handle_result_unwrapped.messages,
     //         vec![secret_toolkit::snip20::send_msg(
     //             config.butt_swbtc_trade_pair.address,
-    //             Uint128(MOCK_AMOUNT_TWO / 2),
+    //             Uint128(MOCK_AMOUNT / 2),
     //             Some(Binary::from(r#"{ "swap": {} }"#.as_bytes())),
     //             None,
     //             BLOCK_SIZE,
