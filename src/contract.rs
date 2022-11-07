@@ -1,7 +1,4 @@
-use crate::constants::{
-    BLOCK_SIZE, CONFIG_KEY, MOCK_AMOUNT, MOCK_BUTT_ADDRESS, MOCK_BUTT_SWBTC_LP_ADDRESS,
-    MOCK_SWBTC_ADDRESS,
-};
+use crate::constants::{BLOCK_SIZE, CONFIG_KEY, MOCK_AMOUNT, MOCK_BUTT_SWBTC_LP_ADDRESS};
 use crate::msg::{Asset, AssetInfo, HandleMsg, InitMsg, QueryMsg, ReceiveMsg, SecretSwapHandleMsg};
 use crate::state::{Config, SecretContract};
 use crate::validations::authorize;
@@ -450,30 +447,30 @@ fn send_lp_to_user_then_deposit_into_farm_contract<S: Storage, A: Api, Q: Querie
         config.swap_to_swbtc_contract_address = None;
         config.swbtc_amount_to_provide = None;
         TypedStoreMut::attach(&mut deps.storage).store(CONFIG_KEY, &config)?;
-        let mut messages: Vec<CosmosMsg> = vec![];
-        messages.push(snip20::transfer_msg(
-            current_user_unwrapped.clone(),
-            lp_balance_of_contract,
-            None,
-            BLOCK_SIZE,
-            config.butt_swbtc_lp.contract_hash.clone(),
-            config.butt_swbtc_lp.address.clone(),
-        )?);
-        messages.push(snip20::send_from_msg(
-            current_user_unwrapped,
-            config.butt_swbtc_farm_pool.address,
-            lp_balance_of_contract,
-            Some(Binary::from(
-                r#"{ "deposit_incentivized_token": {} }"#.as_bytes(),
-            )),
-            None,
-            BLOCK_SIZE,
-            config.butt_swbtc_lp.contract_hash,
-            config.butt_swbtc_lp.address,
-        )?);
 
         Ok(HandleResponse {
-            messages,
+            messages: vec![
+                snip20::transfer_msg(
+                    current_user_unwrapped.clone(),
+                    lp_balance_of_contract,
+                    None,
+                    BLOCK_SIZE,
+                    config.butt_swbtc_lp.contract_hash.clone(),
+                    config.butt_swbtc_lp.address.clone(),
+                )?,
+                snip20::send_from_msg(
+                    current_user_unwrapped,
+                    config.butt_swbtc_farm_pool.address,
+                    lp_balance_of_contract,
+                    Some(Binary::from(
+                        r#"{ "deposit_incentivized_token": {} }"#.as_bytes(),
+                    )),
+                    None,
+                    BLOCK_SIZE,
+                    config.butt_swbtc_lp.contract_hash,
+                    config.butt_swbtc_lp.address,
+                )?,
+            ],
             log: vec![],
             data: None,
         })
@@ -505,6 +502,8 @@ mod tests {
     pub const MOCK_BUTT_SWBTC_TRADE_PAIR_CONTRACT_ADDRESS: &str = "mock-swbtc-address";
     pub const MOCK_SWAP_TO_SWBTC_ADDRESS: &str = "mock-swap-to-swbtc-address";
     pub const MOCK_VIEWING_KEY: &str = "DELIGHTFUL";
+    pub const MOCK_BUTT_ADDRESS: &str = "mock-butt-address";
+    pub const MOCK_SWBTC_ADDRESS: &str = "mock-swbtc-address";
 
     // === HELPERS ===
     fn init_helper() -> (
