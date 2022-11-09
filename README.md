@@ -5,7 +5,7 @@
     <img src="images/logo.png" alt="Logo" height="80">
   </a>
 
-  <h3 align="center">SN Zap by btn.group</h3>
+  <h3 align="center">SN Ezy Farm by btn.group</h3>
 </div>
 
 <!-- TABLE OF CONTENTS -->
@@ -31,7 +31,7 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-This is a smart contract for btn.group's Button Swap ZAP functionality.
+This is a smart contract for btn.group's Ezy Farm functionality.
 The contract:
 1. Swaps a single token into BUTT & SWBTC.
 2. Provides the tokens as liquidity into the trade contract.
@@ -83,7 +83,7 @@ cd code
 # MISSING THE SECRET SWAP CONTRACTS
 secretcli tx compute store snip-20-reference-impl.wasm.gz --from a --gas 3000000 -y --keyring-backend test
 secretcli tx compute store sn-dex-aggregator-v3.wasm.gz --from a --gas 3000000 -y --keyring-backend test
-secretcli tx compute store sn-zap.wasm.gz --from a --gas 3000000 -y --keyring-backend test
+secretcli tx compute store sn-ezy-farm.wasm.gz --from a --gas 3000000 -y --keyring-backend test
 secretcli tx compute store yield-optimizer-b.wasm.gz --from a --gas 3000000 -y --keyring-backend test
 
 # Get the contract's id
