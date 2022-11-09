@@ -1,6 +1,6 @@
 [package]
-name = "cw-secret-network-zap"
-version = "0.1.0"
+name = "cw-secret-network-ezy-farm"
+version = "2.0.0"
 authors = ["Steven Chang <steven.chang@btn.group>"]
 edition = "2018"
 
