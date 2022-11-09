@@ -69,6 +69,7 @@ pub enum AssetInfo {
     },
 }
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum SecretSwapHandleMsg {
     ProvideLiquidity {
         assets: [Asset; 2],
